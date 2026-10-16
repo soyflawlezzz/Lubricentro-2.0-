@@ -1,0 +1,326 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user account with role and branch assignment",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 150 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "enum": ["ADMINISTRADOR", "USUARIO_SUCURSAL"] },
+        "branchId": { "type": "string", "maxLength": 50 },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "role", "branchId"]
+    },
+    "Branch": {
+      "title": "Branch",
+      "description": "Workshop physical branch (Escobar, Maschwitz)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 100 },
+        "code": { "type": "string", "maxLength": 50 },
+        "address": { "type": "string", "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "whatsapp": { "type": "string", "maxLength": 50 },
+        "active": { "type": "boolean" }
+      },
+      "required": ["name", "code"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Customer registered in the workshop",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string", "maxLength": 150 },
+        "documentNumber": { "type": "string", "maxLength": 50 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "whatsapp": { "type": "string", "maxLength": 50 },
+        "email": { "type": "string", "maxLength": 150 },
+        "address": { "type": "string", "maxLength": 200 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "branchId": { "type": "string", "maxLength": 50 },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["fullName", "branchId"]
+    },
+    "Vehicle": {
+      "title": "Vehicle",
+      "description": "Vehicle registered with service history",
+      "type": "object",
+      "properties": {
+        "licensePlate": { "type": "string", "maxLength": 20 },
+        "brand": { "type": "string", "maxLength": 80 },
+        "model": { "type": "string", "maxLength": 80 },
+        "year": { "type": "number" },
+        "currentKm": { "type": "number" },
+        "lastServiceKm": { "type": "number" },
+        "clientId": { "type": "string", "maxLength": 128 },
+        "clientName": { "type": "string", "maxLength": 150 },
+        "branchId": { "type": "string", "maxLength": 50 },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["licensePlate", "brand", "model", "clientId"]
+    },
+    "WorkOrder": {
+      "title": "WorkOrder",
+      "description": "Service work order for oil change or integral mechanics",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string", "maxLength": 50 },
+        "type": { "type": "string", "enum": ["aceite_filtro", "mecanica_integral"] },
+        "status": { "type": "string", "enum": ["pendiente", "en_proceso", "a_entregar", "entregada"] },
+        "branchId": { "type": "string", "maxLength": 50 },
+        "clientId": { "type": "string", "maxLength": 128 },
+        "clientName": { "type": "string", "maxLength": 150 },
+        "clientPhone": { "type": "string", "maxLength": 50 },
+        "clientWhatsapp": { "type": "string", "maxLength": 50 },
+        "vehicleId": { "type": "string", "maxLength": 128 },
+        "licensePlate": { "type": "string", "maxLength": 20 },
+        "vehicleBrand": { "type": "string", "maxLength": 80 },
+        "vehicleModel": { "type": "string", "maxLength": 80 },
+        "vehicleYear": { "type": "number" },
+        "currentKm": { "type": "number" },
+        "lastServiceKm": { "type": "number" },
+        "servicesList": { "type": "string" },
+        "productsList": { "type": "string" },
+        "oilBrand": { "type": "string", "maxLength": 100 },
+        "fluidType": { "type": "string", "maxLength": 100 },
+        "oilFilterCode": { "type": "string", "maxLength": 100 },
+        "airFilterCode": { "type": "string", "maxLength": 100 },
+        "cabinFilterCode": { "type": "string", "maxLength": 100 },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "nextServiceKm": { "type": "number" },
+        "nextServiceDate": { "type": "string" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string", "maxLength": 50 },
+        "statusHistory": { "type": "string" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["orderNumber", "type", "status", "branchId", "licensePlate", "total"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Inventory product item for direct sale or services",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 150 },
+        "code": { "type": "string", "maxLength": 80 },
+        "category": { "type": "string", "maxLength": 80 },
+        "price": { "type": "number" },
+        "cost": { "type": "number" },
+        "stock": { "type": "number" },
+        "status": { "type": "string", "enum": ["activo", "inactivo"] },
+        "branchId": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "code", "price"]
+    },
+    "Sale": {
+      "title": "Sale",
+      "description": "Counter direct sale with commercial delivery note (Remito)",
+      "type": "object",
+      "properties": {
+        "saleNumber": { "type": "string", "maxLength": 50 },
+        "items": { "type": "string" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string", "maxLength": 50 },
+        "branchId": { "type": "string", "maxLength": 50 },
+        "clientName": { "type": "string", "maxLength": 150 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["saleNumber", "total", "paymentMethod", "branchId"]
+    },
+    "Budget": {
+      "title": "Budget",
+      "description": "Budget quote that can be printed, sent via WhatsApp, and converted to OT",
+      "type": "object",
+      "properties": {
+        "budgetNumber": { "type": "string", "maxLength": 50 },
+        "clientName": { "type": "string", "maxLength": 150 },
+        "clientPhone": { "type": "string", "maxLength": 50 },
+        "licensePlate": { "type": "string", "maxLength": 20 },
+        "vehicleBrand": { "type": "string", "maxLength": 80 },
+        "vehicleModel": { "type": "string", "maxLength": 80 },
+        "vehicleYear": { "type": "number" },
+        "items": { "type": "string" },
+        "laborCost": { "type": "number" },
+        "subtotal": { "type": "number" },
+        "total": { "type": "number" },
+        "observations": { "type": "string", "maxLength": 2000 },
+        "branchId": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["pendiente", "aprobado", "convertido_ot", "rechazado"] },
+        "convertedWorkOrderId": { "type": "string", "maxLength": 128 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["budgetNumber", "total", "branchId"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Business expense impact on cash balance and reports",
+      "type": "object",
+      "properties": {
+        "concept": { "type": "string", "maxLength": 200 },
+        "supplier": { "type": "string", "maxLength": 150 },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string", "maxLength": 50 },
+        "branchId": { "type": "string", "maxLength": 50 },
+        "user": { "type": "string", "maxLength": 100 },
+        "date": { "type": "string" },
+        "observations": { "type": "string", "maxLength": 1000 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["concept", "amount", "paymentMethod", "branchId"]
+    },
+    "Reminder": {
+      "title": "Reminder",
+      "description": "Maintenance service reminder by KM or estimated date",
+      "type": "object",
+      "properties": {
+        "workOrderId": { "type": "string", "maxLength": 128 },
+        "clientName": { "type": "string", "maxLength": 150 },
+        "clientWhatsapp": { "type": "string", "maxLength": 50 },
+        "licensePlate": { "type": "string", "maxLength": 20 },
+        "vehicleInfo": { "type": "string", "maxLength": 150 },
+        "estimatedDate": { "type": "string" },
+        "estimatedKm": { "type": "number" },
+        "status": { "type": "string", "enum": ["pendiente", "notificado", "completado"] },
+        "branchId": { "type": "string", "maxLength": 50 },
+        "message": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["clientName", "licensePlate", "branchId"]
+    },
+    "SystemSettings": {
+      "title": "SystemSettings",
+      "description": "System settings for company details, WhatsApp templates, and services list",
+      "type": "object",
+      "properties": {
+        "companyName": { "type": "string", "maxLength": 150 },
+        "logoUrl": { "type": "string" },
+        "phone": { "type": "string", "maxLength": 50 },
+        "whatsapp": { "type": "string", "maxLength": 50 },
+        "address": { "type": "string", "maxLength": 200 },
+        "email": { "type": "string", "maxLength": 150 },
+        "commercialInfo": { "type": "string", "maxLength": 500 },
+        "whatsappReadyMessage": { "type": "string", "maxLength": 1000 },
+        "whatsappBudgetMessage": { "type": "string", "maxLength": 1000 },
+        "whatsappReminderMessage": { "type": "string", "maxLength": 1000 },
+        "servicesCatalog": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Registered auto parts, oil and workshop supplier",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 150 },
+        "cuit": { "type": "string", "maxLength": 30 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "whatsapp": { "type": "string", "maxLength": 50 },
+        "email": { "type": "string", "maxLength": 100 },
+        "address": { "type": "string", "maxLength": 200 },
+        "contactPerson": { "type": "string", "maxLength": 100 },
+        "observations": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["activo", "inactivo"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "cuit"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Supplier commercial invoice and due dates",
+      "type": "object",
+      "properties": {
+        "supplierId": { "type": "string", "maxLength": 128 },
+        "supplierName": { "type": "string", "maxLength": 150 },
+        "cuit": { "type": "string", "maxLength": 30 },
+        "invoiceNumber": { "type": "string", "maxLength": 50 },
+        "voucherType": { "type": "string", "maxLength": 50 },
+        "issueDate": { "type": "string", "maxLength": 20 },
+        "dueDate": { "type": "string", "maxLength": 20 },
+        "concept": { "type": "string", "maxLength": 500 },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["pendiente", "pagada", "vencida"] },
+        "paymentDate": { "type": "string", "maxLength": 30 },
+        "observations": { "type": "string", "maxLength": 1000 },
+        "branchId": { "type": "string", "maxLength": 50 },
+        "attachmentUrl": { "type": "string" },
+        "attachmentName": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["supplierName", "invoiceNumber", "dueDate", "amount", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "User profiles and branch permissions"
+    },
+    "/branches/{branchId}": {
+      "schema": { "$ref": "Branch" },
+      "description": "Company branches"
+    },
+    "/clients/{clientId}": {
+      "schema": { "$ref": "Client" },
+      "description": "Registered clients"
+    },
+    "/vehicles/{vehicleId}": {
+      "schema": { "$ref": "Vehicle" },
+      "description": "Client vehicles"
+    },
+    "/workOrders/{workOrderId}": {
+      "schema": { "$ref": "WorkOrder" },
+      "description": "Work orders for services"
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "Product" },
+      "description": "Product inventory"
+    },
+    "/sales/{saleId}": {
+      "schema": { "$ref": "Sale" },
+      "description": "Counter sales and delivery notes"
+    },
+    "/budgets/{budgetId}": {
+      "schema": { "$ref": "Budget" },
+      "description": "Service budgets"
+    },
+    "/expenses/{expenseId}": {
+      "schema": { "$ref": "Expense" },
+      "description": "Cash expenses"
+    },
+    "/reminders/{reminderId}": {
+      "schema": { "$ref": "Reminder" },
+      "description": "Service reminders"
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "SystemSettings" },
+      "description": "Global and company configuration"
+    },
+    "/suppliers/{supplierId}": {
+      "schema": { "$ref": "Supplier" },
+      "description": "Registered auto parts and oil suppliers"
+    },
+    "/invoices/{invoiceId}": {
+      "schema": { "$ref": "Invoice" },
+      "description": "Supplier invoices and payment due dates"
+    }
+  }
+}

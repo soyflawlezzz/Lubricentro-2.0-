@@ -1,0 +1,140 @@
+import { CompanySettings, Product, ServiceItemDef } from '../types';
+
+export const INITIAL_SERVICES: ServiceItemDef[] = [
+  // Aceite y Filtros
+  { id: 'srv-oil-motor', name: 'Cambio de Aceite de Motor', category: 'aceite_filtro', defaultPrice: 12000, active: true },
+  { id: 'srv-oil-filter', name: 'Cambio Filtro de Aceite', category: 'aceite_filtro', defaultPrice: 4000, active: true },
+  { id: 'srv-air-filter', name: 'Cambio Filtro de Aire', category: 'aceite_filtro', defaultPrice: 4000, active: true },
+  { id: 'srv-cabin-filter', name: 'Cambio Filtro de Habitáculo', category: 'aceite_filtro', defaultPrice: 5000, active: true },
+  { id: 'srv-brake-fluid', name: 'Reemplazo Líquido de Frenos (DOT 4)', category: 'aceite_filtro', defaultPrice: 15000, active: true },
+  { id: 'srv-trans-fluid', name: 'Reemplazo Líquido de Transmisión', category: 'aceite_filtro', defaultPrice: 20000, active: true },
+  { id: 'srv-levels', name: 'Revisión y Completado de Niveles', category: 'aceite_filtro', defaultPrice: 3500, active: true },
+  { id: 'srv-grease', name: 'Engrase y Revisión General de Chasis', category: 'aceite_filtro', defaultPrice: 8000, active: true },
+
+  // Mecánica Integral
+  { id: 'srv-shocks', name: 'Cambio de Amortiguadores Delanteros/Traseros', category: 'mecanica', defaultPrice: 35000, active: true },
+  { id: 'srv-bearings', name: 'Cambio de Rodamientos / Rulemanes de Rueda', category: 'mecanica', defaultPrice: 22000, active: true },
+  { id: 'srv-tie-rod', name: 'Cambio de Extremos y Precaps de Dirección', category: 'mecanica', defaultPrice: 18000, active: true },
+  { id: 'srv-ball-joint', name: 'Cambio de Rótulas de Suspensión', category: 'mecanica', defaultPrice: 16000, active: true },
+  { id: 'srv-scanner', name: 'Diagnóstico Computarizado con Scanner OBD2', category: 'mecanica', defaultPrice: 15000, active: true },
+  { id: 'srv-sway-bar', name: 'Cambio de Bieletas de Barra Estabilizadora', category: 'mecanica', defaultPrice: 12000, active: true },
+  { id: 'srv-bushings', name: 'Cambio de Bujes de Parrilla y Puente', category: 'mecanica', defaultPrice: 26000, active: true },
+  { id: 'srv-brakes', name: 'Frenos Completos (Pastillas, Discos, Cintas)', category: 'mecanica', defaultPrice: 28000, active: true },
+  { id: 'srv-clutch', name: 'Kit de Embrague (Placa, Disco y Crapodina)', category: 'mecanica', defaultPrice: 75000, active: true },
+  { id: 'srv-timing', name: 'Distribución y Bomba de Agua', category: 'mecanica', defaultPrice: 80000, active: true },
+];
+
+export const INITIAL_PRODUCTS: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [];
+
+export const DEFAULT_SETTINGS: CompanySettings = {
+  companyName: 'LUBRICENTRO 2.0',
+  logoUrl: '/lubricentro-logo.svg',
+  phone: '011 5555-4321',
+  whatsapp: '5491155554321',
+  addressEscobar: 'Estrada 1355, Belén de Escobar',
+  addressMaschwitz: 'Colectora Oeste 1439, Ing. Maschwitz',
+  email: 'contacto@lubricentro20.com',
+  commercialInfo: 'C.U.I.T. 30-71829340-8 - Especialistas en lubricación automotriz y mecánica integral.',
+  whatsappReadyTemplate: '¡Hola {cliente}! Te avisamos desde Lubricentro 2.0 que tu vehículo {vehiculo} (Patente: {patente}) ya está listo para retirar en la sucursal {sucursal}. Total: ${total}. ¡Muchas gracias por confiar en nosotros!',
+  whatsappBudgetTemplate: '¡Hola {cliente}! Te acercamos el presupuesto de Lubricentro 2.0 para tu vehículo {vehiculo} (Patente: {patente}) por un total de ${total}. ¿Querés que reservemos tu turno para realizar el trabajo?',
+  whatsappReminderTemplate: '¡Hola {cliente}! Te recordamos desde Lubricentro 2.0 que próximamente corresponde realizar el service de tu {vehiculo} (Patente: {patente}). Podés comunicarte con nosotros para coordinar tu turno en Escobar o Maschwitz.',
+  servicesCatalog: INITIAL_SERVICES,
+  paymentMethods: ['Efectivo', 'Transferencia Bancaria', 'Débito', 'Crédito', 'Mercado Pago', 'Cuenta Corriente', 'Otro']
+};
+
+export const INITIAL_SUPPLIERS = [
+  {
+    name: 'Distribuidora Shell & Castrol Argentina',
+    cuit: '30-68192834-4',
+    phone: '011 4765-8899',
+    whatsapp: '5491147658899',
+    email: 'pedidos@shellcastrol.com.ar',
+    address: 'Av. Juan B. Justo 4320, CABA',
+    contactPerson: 'Martín Rodríguez',
+    observations: 'Proveedor principal de aceites sintéticos y tambores de 205L.',
+    status: 'activo' as const,
+  },
+  {
+    name: 'Filtros Mann & Hummel SRL',
+    cuit: '30-55443322-1',
+    phone: '011 4890-2211',
+    whatsapp: '5491148902211',
+    email: 'ventas@mann-filter.com.ar',
+    address: 'Panamericana Km 38.5, Garín',
+    contactPerson: 'Valeria Gómez',
+    observations: 'Descuento 10% por pago a 15 días.',
+    status: 'activo' as const,
+  },
+  {
+    name: 'Repuestos Warnes Automotor SA',
+    cuit: '30-71092834-9',
+    phone: '011 4855-3344',
+    whatsapp: '5491148553344',
+    email: 'comercial@warnesrepuestos.com',
+    address: 'Av. Warnes 1250, CABA',
+    contactPerson: 'Carlos Benítez',
+    observations: 'Pastillas de freno, tren delantero y amortiguadores.',
+    status: 'activo' as const,
+  },
+];
+
+export const INITIAL_INVOICES = [
+  {
+    supplierName: 'Distribuidora Shell & Castrol Argentina',
+    cuit: '30-68192834-4',
+    invoiceNumber: '0001-00012345',
+    voucherType: 'Factura A' as const,
+    issueDate: '2026-09-25',
+    dueDate: '2026-10-10',
+    concept: 'Tambores 205L Helix Ultra 5W40 y cajas x12 1L',
+    amount: 150000,
+    paymentMethod: 'Transferencia Bancaria',
+    status: 'pendiente' as const,
+    branchId: 'ambas',
+    observations: 'Factura próxima a vencer en 3 días.',
+  },
+  {
+    supplierName: 'Filtros Mann & Hummel SRL',
+    cuit: '30-55443322-1',
+    invoiceNumber: '0003-00004567',
+    voucherType: 'Factura A' as const,
+    issueDate: '2026-09-28',
+    dueDate: '2026-10-12',
+    concept: 'Lote 50 filtros de aceite W712 y 30 filtros de aire C2500',
+    amount: 85000,
+    paymentMethod: 'Cheque',
+    status: 'pendiente' as const,
+    branchId: 'escobar',
+    observations: 'Cheque a 15 días.',
+  },
+  {
+    supplierName: 'Repuestos Warnes Automotor SA',
+    cuit: '30-71092834-9',
+    invoiceNumber: '0002-00088921',
+    voucherType: 'Factura A' as const,
+    issueDate: '2026-09-15',
+    dueDate: '2026-10-05',
+    concept: 'Juegos de pastillas Fras-le y discos de freno ventilados',
+    amount: 62500,
+    paymentMethod: 'Transferencia Bancaria',
+    status: 'vencida' as const,
+    branchId: 'maschwitz',
+    observations: 'Comprobante vencido pendiente de pago.',
+  },
+  {
+    supplierName: 'Distribuidora Shell & Castrol Argentina',
+    cuit: '30-68192834-4',
+    invoiceNumber: '0001-00011980',
+    voucherType: 'Factura A' as const,
+    issueDate: '2026-09-10',
+    dueDate: '2026-10-01',
+    concept: 'Compra de fluidos de freno Wagner y refrigerantes',
+    amount: 110000,
+    paymentMethod: 'Transferencia Bancaria',
+    status: 'pagada' as const,
+    paymentDate: '2026-09-30',
+    branchId: 'ambas',
+    observations: 'Cancelada en término.',
+  },
+];
+

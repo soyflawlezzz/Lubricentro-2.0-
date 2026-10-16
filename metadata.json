@@ -1,0 +1,6 @@
+{
+  "name": "Lubricentro 2.0",
+  "description": "Sistema profesional de gestión integral para lubricentro y taller mecánico con sucursales Escobar e Ing. Maschwitz.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
