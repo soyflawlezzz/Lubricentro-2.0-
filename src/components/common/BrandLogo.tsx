@@ -28,7 +28,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   };
 
   const activeSize = sizeMap[size];
-  const effectiveUrl = !imageError && logoUrl ? logoUrl : !imageError ? '/lubricentro-logo.svg' : null;
+  const effectiveUrl = !imageError && logoUrl ? logoUrl : !imageError ? '/lubricentro-original-logo.png' : null;
 
   return (
     <div className={`flex items-center gap-2.5 ${className}`}>

@@ -13,6 +13,8 @@ interface BudgetFormModalProps {
   vehicles: Vehicle[];
   products: Product[];
   onSaveBudget: (budgetData: Omit<Budget, 'id' | 'createdAt'>) => Promise<string>;
+  budgetToEdit?: Budget | null;
+  onUpdateBudget?: (id: string, budgetData: Partial<Budget>) => Promise<void>;
 }
 
 export const BudgetFormModal: React.FC<BudgetFormModalProps> = ({
@@ -22,6 +24,8 @@ export const BudgetFormModal: React.FC<BudgetFormModalProps> = ({
   vehicles,
   products,
   onSaveBudget,
+  budgetToEdit,
+  onUpdateBudget,
 }) => {
   const { currentBranch, profile, user } = useAuth();
 
@@ -40,23 +44,39 @@ export const BudgetFormModal: React.FC<BudgetFormModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      const activeBranch =
-        profile?.branchId !== 'todas'
-          ? profile?.branchId || 'escobar'
-          : currentBranch !== 'todas'
-          ? currentBranch
-          : 'escobar';
-      setBranchId(activeBranch);
-      setClientName('');
-      setClientPhone('');
-      setLicensePlate('');
-      setVehicleBrand('');
-      setVehicleModel('');
-      setLaborCost(0);
-      setObservations('');
-      setItems([{ id: '1', description: '', code: '', quantity: 1, unitPrice: 0, total: 0 }]);
+      if (budgetToEdit) {
+        setBranchId(budgetToEdit.branchId || 'escobar');
+        setClientName(budgetToEdit.clientName || '');
+        setClientPhone(budgetToEdit.clientPhone || budgetToEdit.clientWhatsapp || '');
+        setLicensePlate(budgetToEdit.licensePlate || '');
+        setVehicleBrand(budgetToEdit.vehicleBrand || '');
+        setVehicleModel(budgetToEdit.vehicleModel || '');
+        setLaborCost(budgetToEdit.laborCost || 0);
+        setObservations(budgetToEdit.observations || '');
+        setItems(
+          budgetToEdit.items && budgetToEdit.items.length > 0
+            ? budgetToEdit.items
+            : [{ id: '1', description: '', code: '', quantity: 1, unitPrice: 0, total: 0 }]
+        );
+      } else {
+        const activeBranch =
+          profile?.branchId !== 'todas'
+            ? profile?.branchId || 'escobar'
+            : currentBranch !== 'todas'
+            ? currentBranch
+            : 'escobar';
+        setBranchId(activeBranch);
+        setClientName('');
+        setClientPhone('');
+        setLicensePlate('');
+        setVehicleBrand('');
+        setVehicleModel('');
+        setLaborCost(0);
+        setObservations('');
+        setItems([{ id: '1', description: '', code: '', quantity: 1, unitPrice: 0, total: 0 }]);
+      }
     }
-  }, [isOpen, profile, currentBranch]);
+  }, [isOpen, budgetToEdit, profile, currentBranch]);
 
   // Autocomplete vehicle/client if license plate matched
   const handlePlateChange = (plateVal: string) => {
@@ -145,27 +165,45 @@ export const BudgetFormModal: React.FC<BudgetFormModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const budgetNumber = `PRE-${Date.now().toString().slice(-6)}`;
-      await onSaveBudget({
-        budgetNumber,
-        clientName: clientName.trim(),
-        clientPhone: clientPhone.trim(),
-        licensePlate: licensePlate.trim().toUpperCase(),
-        vehicleBrand: vehicleBrand.trim(),
-        vehicleModel: vehicleModel.trim(),
-        items: validItems,
-        laborCost: Number(laborCost) || 0,
-        subtotal,
-        total,
-        observations: observations.trim(),
-        branchId,
-        status: 'pendiente',
-        createdBy: profile?.displayName || user?.displayName || 'Usuario',
-      });
+      if (budgetToEdit?.id && onUpdateBudget) {
+        await onUpdateBudget(budgetToEdit.id, {
+          clientName: clientName.trim(),
+          clientPhone: clientPhone.trim(),
+          clientWhatsapp: clientPhone.trim(),
+          licensePlate: licensePlate.trim().toUpperCase(),
+          vehicleBrand: vehicleBrand.trim(),
+          vehicleModel: vehicleModel.trim(),
+          items: validItems,
+          laborCost: Number(laborCost) || 0,
+          subtotal,
+          total,
+          observations: observations.trim(),
+          branchId,
+        });
+      } else {
+        const budgetNumber = `PRE-${Date.now().toString().slice(-6)}`;
+        await onSaveBudget({
+          budgetNumber,
+          clientName: clientName.trim(),
+          clientPhone: clientPhone.trim(),
+          clientWhatsapp: clientPhone.trim(),
+          licensePlate: licensePlate.trim().toUpperCase(),
+          vehicleBrand: vehicleBrand.trim(),
+          vehicleModel: vehicleModel.trim(),
+          items: validItems,
+          laborCost: Number(laborCost) || 0,
+          subtotal,
+          total,
+          observations: observations.trim(),
+          branchId,
+          status: 'pendiente',
+          createdBy: profile?.displayName || user?.displayName || 'Usuario',
+        });
+      }
       onClose();
-    } catch (err) {
-      console.error(err);
-      alert('Error al guardar presupuesto.');
+    } catch (err: any) {
+      console.error('Error al guardar presupuesto:', err);
+      alert(`Error al guardar el presupuesto: ${err?.message || 'Error de conexión o permisos'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -178,10 +216,10 @@ export const BudgetFormModal: React.FC<BudgetFormModalProps> = ({
       title={
         <div className="flex items-center gap-2">
           <FileSpreadsheet className="w-5 h-5 text-red-500" />
-          <span>Nuevo Presupuesto para Cliente</span>
+          <span>{budgetToEdit ? `Modificar Presupuesto #${budgetToEdit.budgetNumber}` : 'Nuevo Presupuesto para Cliente'}</span>
         </div>
       }
-      subtitle="Genera una cotización formal que luego puedes convertir en OT y enviar por WhatsApp"
+      subtitle={budgetToEdit ? 'Actualiza los trabajos, repuestos o valores de esta cotización' : 'Genera una cotización formal que luego puedes convertir en OT y enviar por WhatsApp'}
       maxWidth="4xl"
     >
       <form onSubmit={handleSubmit} className="space-y-6">

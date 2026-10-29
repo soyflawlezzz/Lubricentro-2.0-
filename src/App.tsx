@@ -26,6 +26,7 @@ import { SuppliersList } from './components/suppliers/SuppliersList';
 import { InvoicesCalendar } from './components/invoices/InvoicesCalendar';
 import { AppointmentsCalendar } from './components/appointments/AppointmentsCalendar';
 import { AppointmentFormModal } from './components/appointments/AppointmentFormModal';
+import { GlobalSearchModal } from './components/common/GlobalSearchModal';
 import {
   WorkOrder,
   WorkOrderType,
@@ -42,6 +43,9 @@ import {
   Invoice,
   ServiceAppointment,
 } from './types';
+import { DEFAULT_SETTINGS } from './services/seedData';
+import { DigitalPassportModal } from './components/stickers/DigitalPassportModal';
+import { ServiceStickerModal } from './components/stickers/ServiceStickerModal';
 import {
   subscribeWorkOrders,
   createWorkOrder,
@@ -56,6 +60,8 @@ import {
   updateClient,
   subscribeVehicles,
   createVehicle,
+  updateVehicle,
+  deleteVehicle,
   subscribeProducts,
   createProduct,
   updateProduct,
@@ -80,8 +86,11 @@ import {
   deleteAppointment,
   clearCatalogAndInvoicesDatabase,
   clearProductsCatalog,
+  getVehiclePassportData,
+  fetchDirectClientsAndVehicles,
+  restoreSampleData,
 } from './services/db';
-import { Fuel, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
   const { user, profile, loading, currentBranch, isAdmin, canAccessSupplierModules } = useAuth();
@@ -103,6 +112,32 @@ const MainAppContent: React.FC = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [appointments, setAppointments] = useState<ServiceAppointment[]>([]);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(new Date());
+
+  const handleManualPullData = async () => {
+    try {
+      const { clients: freshClients, vehicles: freshVehicles } = await fetchDirectClientsAndVehicles();
+      setClients(freshClients);
+      setVehicles(freshVehicles);
+      setLastSyncTime(new Date());
+      showToast(`Pull manual exitoso: ${freshClients.length} clientes y ${freshVehicles.length} vehículos sincronizados desde Firebase.`, 'success');
+      return { clientsCount: freshClients.length, vehiclesCount: freshVehicles.length };
+    } catch (err) {
+      showToast('Error al realizar el pull manual de datos desde Firebase.', 'error');
+      throw err;
+    }
+  };
+
+  const handleRestoreSampleData = async () => {
+    try {
+      const res = await restoreSampleData();
+      setLastSyncTime(new Date());
+      showToast(`Restauración exitosa: ${res.clientsCount} clientes, ${res.vehiclesCount} vehículos y ${res.budgetsCount} presupuestos creados en la base de datos.`, 'success');
+    } catch (err) {
+      showToast('Error al restaurar los datos de muestra.', 'error');
+      throw err;
+    }
+  };
 
   // Guard against unauthorized tab access
   // Modules FACTURAS, PROVEEDORES, CALENDARIO DE VENCIMIENTOS are STRICTLY restricted
@@ -134,30 +169,112 @@ const MainAppContent: React.FC = () => {
   const [activeRemitoSale, setActiveRemitoSale] = useState<Sale | null>(null);
 
   const [isNewBudgetOpen, setIsNewBudgetOpen] = useState(false);
+  const [budgetToEdit, setBudgetToEdit] = useState<Budget | null>(null);
   const [activeBudgetModal, setActiveBudgetModal] = useState<Budget | null>(null);
   const [appointmentFromWorkOrder, setAppointmentFromWorkOrder] = useState<WorkOrder | null>(null);
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+
+  const handleUpdateBudget = async (id: string, data: Partial<Budget>) => {
+    try {
+      await updateBudget(id, data);
+      showToast('Presupuesto modificado y actualizado correctamente', 'success');
+      setBudgetToEdit(null);
+    } catch (err) {
+      showToast('Error al actualizar el presupuesto', 'error');
+      throw err;
+    }
+  };
+
+  // Sticker & Digital Passport states
+  const [passportPlate, setPassportPlate] = useState<string | null>(null);
+  const [passportOrders, setPassportOrders] = useState<WorkOrder[]>([]);
+  const [passportVehicle, setPassportVehicle] = useState<Vehicle | undefined>(undefined);
+  const [activeStickerModal, setActiveStickerModal] = useState<{
+    order?: WorkOrder | null;
+    vehicle?: Vehicle | null;
+  } | null>(null);
+
+  const handleOpenPassport = async (plate: string) => {
+    const normPlate = plate.trim().toUpperCase();
+    if (!normPlate) return;
+    setPassportPlate(normPlate);
+    try {
+      const data = await getVehiclePassportData(normPlate);
+      setPassportOrders(data.workOrders);
+      setPassportVehicle(data.vehicle);
+    } catch (err) {
+      console.error('Error fetching passport data:', err);
+    }
+  };
+
+  // Inspect URL query parameters for public QR scan (e.g. ?passport=AB123CD)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const plate = params.get('passport') || params.get('qr') || params.get('patente');
+    if (plate) {
+      handleOpenPassport(plate.trim().toUpperCase());
+    }
+  }, []);
 
   // Subscribe to real-time collections when user is authenticated
   useEffect(() => {
     if (!user) return;
 
-    const unsubOrders = subscribeWorkOrders(currentBranch, setWorkOrders);
-    const unsubSales = subscribeSales(currentBranch, setSales);
-    const unsubBudgets = subscribeBudgets(currentBranch, setBudgets);
-    const unsubClients = subscribeClients(currentBranch, setClients);
-    const unsubVehicles = subscribeVehicles(currentBranch, setVehicles);
-    const unsubProducts = subscribeProducts(setProducts);
-    const unsubExpenses = subscribeExpenses(currentBranch, setExpenses);
-    const unsubReminders = subscribeReminders(currentBranch, setReminders);
-    const unsubSettings = subscribeSettings(setSettings);
-    const unsubAppointments = subscribeAppointments(setAppointments);
+    const notifySync = () => setLastSyncTime(new Date());
+
+    const unsubOrders = subscribeWorkOrders(currentBranch, (data) => {
+      setWorkOrders(data);
+      notifySync();
+    });
+    const unsubSales = subscribeSales(currentBranch, (data) => {
+      setSales(data);
+      notifySync();
+    });
+    const unsubBudgets = subscribeBudgets(currentBranch, (data) => {
+      setBudgets(data);
+      notifySync();
+    });
+    const unsubClients = subscribeClients(currentBranch, (data) => {
+      setClients(data);
+      notifySync();
+    });
+    const unsubVehicles = subscribeVehicles(currentBranch, (data) => {
+      setVehicles(data);
+      notifySync();
+    });
+    const unsubProducts = subscribeProducts((data) => {
+      setProducts(data);
+      notifySync();
+    });
+    const unsubExpenses = subscribeExpenses(currentBranch, (data) => {
+      setExpenses(data);
+      notifySync();
+    });
+    const unsubReminders = subscribeReminders(currentBranch, (data) => {
+      setReminders(data);
+      notifySync();
+    });
+    const unsubSettings = subscribeSettings((data) => {
+      setSettings(data);
+      notifySync();
+    });
+    const unsubAppointments = subscribeAppointments((data) => {
+      setAppointments(data);
+      notifySync();
+    });
 
     // Only subscribe to invoices and suppliers if Lubricentro, Fede, or Google Owner Account
     let unsubInvoices: (() => void) | undefined;
     let unsubSuppliers: (() => void) | undefined;
     if (canAccessSupplierModules) {
-      unsubInvoices = subscribeInvoices(setInvoices);
-      unsubSuppliers = subscribeSuppliers(setSuppliers);
+      unsubInvoices = subscribeInvoices((data) => {
+        setInvoices(data);
+        notifySync();
+      });
+      unsubSuppliers = subscribeSuppliers((data) => {
+        setSuppliers(data);
+        notifySync();
+      });
     }
 
     return () => {
@@ -298,19 +415,11 @@ const MainAppContent: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100 p-4">
         <div className="mb-4">
-          {settings?.logoUrl ? (
-            <img
-              src={settings.logoUrl}
-              alt="Lubricentro 2.0"
-              className="h-16 w-auto max-w-[220px] object-contain mx-auto animate-pulse select-none"
-            />
-          ) : (
-            <img
-              src="/lubricentro-logo.svg"
-              alt="Lubricentro 2.0"
-              className="h-16 w-auto max-w-[220px] object-contain mx-auto animate-pulse select-none"
-            />
-          )}
+          <img
+            src={settings?.logoUrl || '/lubricentro-original-logo.png'}
+            alt="Lubricentro 2.0"
+            className="h-18 w-auto max-w-[240px] object-contain mx-auto animate-pulse select-none drop-shadow-md"
+          />
         </div>
         <p className="text-xs text-slate-400 mt-2 flex items-center gap-2">
           <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" />
@@ -321,6 +430,21 @@ const MainAppContent: React.FC = () => {
   }
 
   if (!user) {
+    if (passportPlate) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 selection:bg-red-600 selection:text-white">
+          <DigitalPassportModal
+            isOpen={!!passportPlate}
+            onClose={() => setPassportPlate(null)}
+            licensePlate={passportPlate}
+            vehicle={passportVehicle}
+            workOrders={passportOrders}
+            settings={settings}
+          />
+        </div>
+      );
+    }
+
     return (
       <LoginView
         logoUrl={settings?.logoUrl}
@@ -337,6 +461,7 @@ const MainAppContent: React.FC = () => {
         activeTab={activeTab}
         logoUrl={settings?.logoUrl}
         companyName={settings?.companyName}
+        onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -360,6 +485,8 @@ const MainAppContent: React.FC = () => {
                 expenses={expenses}
                 reminders={reminders}
                 invoices={invoices}
+                products={products}
+                onOpenOrder={(order) => setSelectedWorkOrder(order)}
                 onNavigate={(tab) => setActiveTab(tab)}
                 onOpenNewWorkOrder={(type) => {
                   setWorkOrderPresetData(undefined);
@@ -435,9 +562,16 @@ const MainAppContent: React.FC = () => {
             {activeTab === 'budgets' && (
               <BudgetsList
                 budgets={budgets}
-                onNewBudget={() => setIsNewBudgetOpen(true)}
+                onNewBudget={() => {
+                  setBudgetToEdit(null);
+                  setIsNewBudgetOpen(true);
+                }}
                 onViewBudget={(b) => setActiveBudgetModal(b)}
                 onConvertToWorkOrder={handleConvertToWorkOrder}
+                onEditBudget={(b) => {
+                  setBudgetToEdit(b);
+                  setIsNewBudgetOpen(true);
+                }}
               />
             )}
 
@@ -446,17 +580,60 @@ const MainAppContent: React.FC = () => {
                 clients={clients}
                 vehicles={vehicles}
                 workOrders={workOrders}
-                onSaveClient={async (data) => {
-                  await createClient(data);
-                  showToast('Cliente guardado correctamente', 'success');
+                onSaveClient={async (clientData, vehiclesData) => {
+                  const clientId = await createClient(clientData);
+                  if (vehiclesData && vehiclesData.length > 0) {
+                    for (const veh of vehiclesData) {
+                      await createVehicle({
+                        ...veh,
+                        clientId,
+                        clientName: clientData.fullName,
+                      });
+                    }
+                  }
+                  showToast('Cliente y vehículos guardados correctamente', 'success');
                 }}
-                onUpdateClient={async (id, data) => {
-                  await updateClient(id, data);
+                onUpdateClient={async (id, clientData, vehiclesData) => {
+                  await updateClient(id, clientData);
+                  if (vehiclesData && vehiclesData.length > 0) {
+                    for (const veh of vehiclesData) {
+                      const existing = vehicles.find(
+                        (v) => (v.licensePlate || '').trim().toUpperCase() === veh.licensePlate.trim().toUpperCase()
+                      );
+                      if (existing) {
+                        await updateVehicle(existing.id, {
+                          ...veh,
+                          clientId: id,
+                          clientName: clientData.fullName || existing.clientName,
+                        });
+                      } else {
+                        await createVehicle({
+                          ...veh,
+                          clientId: id,
+                          clientName: clientData.fullName || '',
+                        });
+                      }
+                    }
+                  }
                   showToast('Cliente actualizado correctamente', 'success');
+                }}
+                onSaveVehicle={async (vData) => {
+                  await createVehicle(vData);
+                  showToast(`Vehículo patente ${vData.licensePlate} guardado`, 'success');
+                }}
+                onUpdateVehicle={async (vId, vData) => {
+                  await updateVehicle(vId, vData);
+                  showToast(`Vehículo actualizado`, 'success');
+                }}
+                onDeleteVehicle={async (vId) => {
+                  await deleteVehicle(vId);
+                  showToast('Vehículo eliminado', 'info');
                 }}
                 onSelectVehiclePlate={(plate) => {
                   setActiveTab('vehicles');
                 }}
+                onOpenSticker={(v) => setActiveStickerModal({ vehicle: v })}
+                onOpenPassport={(plate) => handleOpenPassport(plate)}
               />
             )}
 
@@ -467,6 +644,8 @@ const MainAppContent: React.FC = () => {
                 budgets={budgets}
                 sales={sales}
                 onOpenWorkOrder={(o) => setSelectedWorkOrder(o)}
+                onOpenSticker={(v) => setActiveStickerModal({ vehicle: v })}
+                onOpenPassport={(plate) => handleOpenPassport(plate)}
               />
             )}
 
@@ -622,16 +801,33 @@ const MainAppContent: React.FC = () => {
             {activeTab === 'settings' && isAdmin && (
               <SettingsView
                 settings={settings}
+                clientsCount={clients.length}
+                vehiclesCount={vehicles.length}
+                workOrdersCount={workOrders.length}
+                budgetsCount={budgets.length}
+                appointmentsCount={appointments.length}
+                lastSyncTime={lastSyncTime}
+                onManualPullData={handleManualPullData}
+                onRestoreSampleData={handleRestoreSampleData}
                 onSaveSettings={async (data) => {
+                  setSettings((prev) => (prev ? { ...prev, ...data } : { ...DEFAULT_SETTINGS, ...data }));
                   await updateSettings(data);
                   showToast('Configuración guardada correctamente', 'success');
                 }}
                 onClearDatabase={async () => {
                   await clearCatalogAndInvoicesDatabase();
+                  setWorkOrders([]);
+                  setSales([]);
+                  setBudgets([]);
+                  setClients([]);
+                  setVehicles([]);
                   setProducts([]);
+                  setExpenses([]);
+                  setReminders([]);
+                  setAppointments([]);
                   setInvoices([]);
                   setSuppliers([]);
-                  showToast('Se limpiaron los productos, facturas y proveedores con éxito', 'info');
+                  showToast('Se reiniciaron todos los datos de la base de datos a cero.', 'info');
                 }}
               />
             )}
@@ -660,14 +856,18 @@ const MainAppContent: React.FC = () => {
       />
 
       {/* 2. Work Order Details / Status / Print Sheet */}
-      <WorkOrderDetailModal
-        isOpen={!!selectedWorkOrder}
-        onClose={() => setSelectedWorkOrder(null)}
-        order={selectedWorkOrder}
-        onUpdateStatus={handleUpdateOrderStatus}
-        onScheduleAppointment={(order) => setAppointmentFromWorkOrder(order)}
-        settings={settings}
-      />
+      {selectedWorkOrder && (
+        <WorkOrderDetailModal
+          isOpen={!!selectedWorkOrder}
+          onClose={() => setSelectedWorkOrder(null)}
+          order={selectedWorkOrder}
+          onUpdateStatus={handleUpdateOrderStatus}
+          onScheduleAppointment={(order) => setAppointmentFromWorkOrder(order)}
+          onOpenSticker={(order) => setActiveStickerModal({ order })}
+          onOpenPassport={(plate) => handleOpenPassport(plate)}
+          settings={settings}
+        />
+      )}
 
       {/* Schedule Shift Linked Directly to Work Order */}
       {appointmentFromWorkOrder && (
@@ -707,20 +907,27 @@ const MainAppContent: React.FC = () => {
       />
 
       {/* 4. Commercial Delivery Note (Remito) */}
-      <DeliveryNoteModal
-        isOpen={!!activeRemitoSale}
-        onClose={() => setActiveRemitoSale(null)}
-        sale={activeRemitoSale}
-        settings={settings}
-      />
+      {activeRemitoSale && (
+        <DeliveryNoteModal
+          isOpen={!!activeRemitoSale}
+          onClose={() => setActiveRemitoSale(null)}
+          sale={activeRemitoSale}
+          settings={settings}
+        />
+      )}
 
-      {/* 5. New Budget Form */}
+      {/* 5. New or Edit Budget Form */}
       <BudgetFormModal
         isOpen={isNewBudgetOpen}
-        onClose={() => setIsNewBudgetOpen(false)}
+        onClose={() => {
+          setIsNewBudgetOpen(false);
+          setBudgetToEdit(null);
+        }}
         clients={clients}
         vehicles={vehicles}
         products={products}
+        budgetToEdit={budgetToEdit}
+        onUpdateBudget={handleUpdateBudget}
         onSaveBudget={async (data) => {
           const id = await createBudget(data);
           showToast('Presupuesto creado con éxito', 'success');
@@ -734,13 +941,77 @@ const MainAppContent: React.FC = () => {
       />
 
       {/* 6. Budget Details / Print Sheet */}
-      <BudgetDetailModal
-        isOpen={!!activeBudgetModal}
-        onClose={() => setActiveBudgetModal(null)}
-        budget={activeBudgetModal}
-        onConvertToWorkOrder={handleConvertToWorkOrder}
-        settings={settings}
+      {activeBudgetModal && (
+        <BudgetDetailModal
+          isOpen={!!activeBudgetModal}
+          onClose={() => setActiveBudgetModal(null)}
+          budget={activeBudgetModal}
+          onConvertToWorkOrder={handleConvertToWorkOrder}
+          onEditBudget={(b) => {
+            setActiveBudgetModal(null);
+            setBudgetToEdit(b);
+            setIsNewBudgetOpen(true);
+          }}
+          settings={settings}
+        />
+      )}
+
+      {/* 7. Quick Universal Search (Ctrl + K) */}
+      <GlobalSearchModal
+        isOpen={isGlobalSearchOpen}
+        onClose={() => setIsGlobalSearchOpen(false)}
+        vehicles={vehicles}
+        clients={clients}
+        workOrders={workOrders}
+        onOpenOrder={(order) => {
+          setSelectedWorkOrder(order);
+          setIsGlobalSearchOpen(false);
+        }}
+        onNewOrderForVehicle={(veh) => {
+          setWorkOrderInitialType('aceite_filtro');
+          setWorkOrderPresetData({
+            licensePlate: veh.licensePlate,
+            vehicleBrand: veh.brand,
+            vehicleModel: veh.model,
+            vehicleYear: veh.year,
+            currentKm: veh.currentKm,
+            lastServiceKm: veh.lastServiceKm,
+            clientName: veh.clientName,
+            branchId: veh.branchId as any,
+          });
+          setIsWorkOrderFormOpen(true);
+          setIsGlobalSearchOpen(false);
+        }}
       />
+
+      {/* 8. Digital Passport Modal */}
+      {passportPlate && (
+        <DigitalPassportModal
+          isOpen={!!passportPlate}
+          onClose={() => setPassportPlate(null)}
+          licensePlate={passportPlate}
+          vehicle={passportVehicle || vehicles.find((v) => (v.licensePlate || '').trim().toUpperCase() === passportPlate)}
+          workOrders={passportOrders.length > 0 ? passportOrders : workOrders}
+          settings={settings}
+          onOpenSticker={() => {
+            const matchedVeh = passportVehicle || vehicles.find((v) => (v.licensePlate || '').trim().toUpperCase() === passportPlate);
+            const matchedOrder = passportOrders[0] || workOrders.find((w) => (w.licensePlate || '').trim().toUpperCase() === passportPlate);
+            setActiveStickerModal({ vehicle: matchedVeh, order: matchedOrder });
+          }}
+        />
+      )}
+
+      {/* 9. Service Sticker QR Generator Modal */}
+      {activeStickerModal && (
+        <ServiceStickerModal
+          isOpen={!!activeStickerModal}
+          onClose={() => setActiveStickerModal(null)}
+          order={activeStickerModal.order}
+          vehicle={activeStickerModal.vehicle}
+          settings={settings}
+          onOpenPassport={(plate) => handleOpenPassport(plate)}
+        />
+      )}
     </div>
   );
 };

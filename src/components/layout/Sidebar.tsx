@@ -105,21 +105,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         {/* Mobile Header in Drawer */}
         <div className="flex items-center justify-between p-4 border-b border-slate-800 lg:hidden">
-          <div className="flex items-center gap-2.5">
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt={companyName || 'Lubricentro 2.0'}
-                className="h-8 max-h-8 w-auto max-w-[140px] object-contain drop-shadow-sm select-none"
-              />
-            ) : (
-              <img
-                src="/lubricentro-logo.svg"
-                alt="Lubricentro 2.0"
-                className="h-7 max-h-7 w-auto max-w-[130px] object-contain drop-shadow-sm select-none"
-              />
-            )}
-          </div>
+            <img
+              src={logoUrl || '/lubricentro-original-logo.png'}
+              alt={companyName || 'Lubricentro 2.0'}
+              className="h-8 max-h-8 w-auto max-w-[140px] object-contain drop-shadow-sm select-none"
+            />
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
@@ -163,19 +153,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="bg-slate-900/60 rounded-xl p-3 border border-slate-800/80 text-xs text-slate-400">
             <div className="flex items-center justify-between font-bold text-slate-200 mb-1.5">
               <div className="flex items-center gap-1.5">
-                {logoUrl ? (
-                  <img
-                    src={logoUrl}
-                    alt="Logo"
-                    className="h-4 max-h-4 w-auto max-w-[80px] object-contain"
-                  />
-                ) : (
-                  <img
-                    src="/lubricentro-logo.svg"
-                    alt="Logo"
-                    className="h-4 max-h-4 w-auto max-w-[70px] object-contain"
-                  />
-                )}
+                <img
+                  src={logoUrl || '/lubricentro-original-logo.png'}
+                  alt="Logo"
+                  className="h-4 max-h-4 w-auto max-w-[80px] object-contain"
+                />
               </div>
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-950 text-red-400 font-mono">
                 v2.0 PWA

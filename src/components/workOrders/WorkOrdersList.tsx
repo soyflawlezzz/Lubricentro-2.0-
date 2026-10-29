@@ -20,6 +20,7 @@ import {
   ArrowUpDown,
   Car,
   CalendarClock,
+  QrCode,
 } from 'lucide-react';
 
 interface WorkOrdersListProps {
@@ -27,6 +28,7 @@ interface WorkOrdersListProps {
   onOpenOrder: (order: WorkOrder) => void;
   onNewOrder: (type: WorkOrderType) => void;
   onScheduleAppointment?: (order: WorkOrder) => void;
+  onOpenSticker?: (order: WorkOrder) => void;
 }
 
 export const WorkOrdersList: React.FC<WorkOrdersListProps> = ({
@@ -34,6 +36,7 @@ export const WorkOrdersList: React.FC<WorkOrdersListProps> = ({
   onOpenOrder,
   onNewOrder,
   onScheduleAppointment,
+  onOpenSticker,
 }) => {
   const { currentBranch, isAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
@@ -305,6 +308,18 @@ export const WorkOrdersList: React.FC<WorkOrdersListProps> = ({
                             <CalendarClock className="w-4 h-4" />
                           </button>
                         )}
+                        {onOpenSticker && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenSticker(order);
+                            }}
+                            className="p-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-300 transition-colors"
+                            title="Generar Sticker QR para parabrisas"
+                          >
+                            <QrCode className="w-4 h-4 text-red-400" />
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -356,6 +371,19 @@ export const WorkOrdersList: React.FC<WorkOrdersListProps> = ({
                     <span>#{order.orderNumber}</span>
                   </div>
                   <div className="flex items-center gap-2">
+                    {onOpenSticker && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenSticker(order);
+                        }}
+                        className="px-2 py-0.5 rounded bg-red-600/20 text-red-300 font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                        title="Sticker QR"
+                      >
+                        <QrCode className="w-3 h-3 text-red-400" />
+                        <span>Sticker</span>
+                      </button>
+                    )}
                     {onScheduleAppointment && (
                       <button
                         onClick={(e) => {

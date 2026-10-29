@@ -35,7 +35,6 @@ export const RemindersList: React.FC<RemindersListProps> = ({
 
   const filtered = useMemo(() => {
     return reminders.filter((r) => {
-      if (currentBranch !== 'todas' && r.branchId !== currentBranch) return false;
       if (filter !== 'todos' && r.status !== filter) return false;
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
@@ -45,6 +44,7 @@ export const RemindersList: React.FC<RemindersListProps> = ({
           r.vehicleInfo.toLowerCase().includes(q)
         );
       }
+      if (currentBranch !== 'todas' && r.branchId && r.branchId !== currentBranch) return false;
       return true;
     });
   }, [reminders, currentBranch, filter, searchTerm]);

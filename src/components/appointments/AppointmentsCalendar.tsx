@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ServiceAppointment,
   Client,
@@ -37,6 +37,13 @@ import {
 import { AppointmentFormModal } from './AppointmentFormModal';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
+import {
+  initGoogleCalendarAuth,
+  signInGoogleCalendar,
+  getGoogleCalendarAccessToken,
+  syncAppointmentToGoogleCalendar,
+} from '../../services/googleCalendar';
+
 
 interface AppointmentsCalendarProps {
   appointments: ServiceAppointment[];
@@ -73,6 +80,70 @@ export const AppointmentsCalendar: React.FC<AppointmentsCalendarProps> = ({
   const [appointmentToEdit, setAppointmentToEdit] = useState<ServiceAppointment | null>(null);
   const [selectedDateForNew, setSelectedDateForNew] = useState<string | undefined>();
   const [appointmentToDelete, setAppointmentToDelete] = useState<ServiceAppointment | null>(null);
+
+  // Google Calendar Integration states
+  const [isCalendarConnected, setIsCalendarConnected] = useState(false);
+  const [calendarUserEmail, setCalendarUserEmail] = useState<string | null>(null);
+  const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = initGoogleCalendarAuth(
+      (user) => {
+        setIsCalendarConnected(true);
+        setCalendarUserEmail(user.email || 'Conectado');
+      },
+      () => {
+        setIsCalendarConnected(false);
+        setCalendarUserEmail(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const handleConnectGoogleCalendar = async () => {
+    try {
+      const res = await signInGoogleCalendar();
+      if (res) {
+        setIsCalendarConnected(true);
+        setCalendarUserEmail(res.user.email || 'Conectado');
+        alert('¡Conectado exitosamente con Google Calendar!');
+      }
+    } catch (err: any) {
+      console.error('Google Calendar login failed:', err);
+      alert('No se pudo conectar con Google Calendar.');
+    }
+  };
+
+  const handleSyncAllToCalendar = async () => {
+    if (!isCalendarConnected) {
+      await handleConnectGoogleCalendar();
+      return;
+    }
+    const token = await getGoogleCalendarAccessToken();
+    if (!token) {
+      alert('Sesión de Google Calendar expirada. Por favor reconecte.');
+      setIsCalendarConnected(false);
+      return;
+    }
+
+    const confirmed = window.confirm(`¿Deseas sincronizar los ${appointments.length} turnos actuales con tu Google Calendar principal?`);
+    if (!confirmed) return;
+
+    setIsSyncingCalendar(true);
+    try {
+      let count = 0;
+      for (const app of appointments) {
+        await syncAppointmentToGoogleCalendar(app, token);
+        count++;
+      }
+      alert(`¡Sincronización exitosa! Se exportaron ${count} turnos a Google Calendar.`);
+    } catch (err: any) {
+      console.error('Sync error:', err);
+      alert(`Error al sincronizar turnos: ${err.message || 'Error desconocido'}`);
+    } finally {
+      setIsSyncingCalendar(false);
+    }
+  };
 
   // Month navigation helpers
   const year = currentDate.getFullYear();
@@ -256,7 +327,29 @@ export const AppointmentsCalendar: React.FC<AppointmentsCalendarProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {isCalendarConnected ? (
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-900 border border-emerald-500/30 text-xs text-emerald-400 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Calendar ({calendarUserEmail})</span>
+              <button
+                onClick={handleSyncAllToCalendar}
+                disabled={isSyncingCalendar}
+                className="ml-2 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isSyncingCalendar ? 'Sincronizando...' : 'Sincronizar con Google Calendar'}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleConnectGoogleCalendar}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 border border-slate-700 hover:border-emerald-500 text-xs sm:text-sm text-white font-bold transition-all cursor-pointer shadow-sm"
+            >
+              <CalendarIcon className="w-4 h-4 text-emerald-400" />
+              <span>Conectar Google Calendar</span>
+            </button>
+          )}
+
           <button
             onClick={() => handleOpenNewAppointment()}
             className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-red-600 hover:bg-red-500 text-white text-xs sm:text-sm font-bold transition-all shadow-lg shadow-red-950/50 cursor-pointer"
@@ -831,8 +924,42 @@ export const AppointmentsCalendar: React.FC<AppointmentsCalendarProps> = ({
           clients={clients}
           vehicles={vehicles}
           settings={settings}
-          onSave={onSaveAppointment}
-          onUpdate={onUpdateAppointment}
+          onSave={async (data) => {
+            const id = await onSaveAppointment(data);
+            if (isCalendarConnected) {
+              const token = await getGoogleCalendarAccessToken();
+              if (token) {
+                try {
+                  await syncAppointmentToGoogleCalendar(
+                    { ...data, id: id || 'new-app' } as ServiceAppointment,
+                    token
+                  );
+                } catch (e) {
+                  console.warn('Auto-sync appointment error:', e);
+                }
+              }
+            }
+            return id;
+          }}
+          onUpdate={async (id, data) => {
+            await onUpdateAppointment(id, data);
+            if (isCalendarConnected) {
+              const token = await getGoogleCalendarAccessToken();
+              if (token) {
+                try {
+                  const updatedFull = appointments.find((a) => a.id === id);
+                  if (updatedFull) {
+                    await syncAppointmentToGoogleCalendar(
+                      { ...updatedFull, ...data } as ServiceAppointment,
+                      token
+                    );
+                  }
+                } catch (e) {
+                  console.warn('Auto-sync appointment update error:', e);
+                }
+              }
+            }
+          }}
         />
       )}
 

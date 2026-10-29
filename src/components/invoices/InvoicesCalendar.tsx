@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Invoice, Supplier } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import {
@@ -13,9 +13,16 @@ import {
   Building2,
   FileText,
   Filter,
+  RefreshCw,
 } from 'lucide-react';
 import { InvoiceDetailModal } from './InvoiceDetailModal';
 import { InvoiceFormModal } from './InvoiceFormModal';
+import {
+  initGoogleCalendarAuth,
+  signInGoogleCalendar,
+  getGoogleCalendarAccessToken,
+  syncInvoiceToGoogleCalendar,
+} from '../../services/googleCalendar';
 
 interface InvoicesCalendarProps {
   invoices: Invoice[];
@@ -40,6 +47,72 @@ export const InvoicesCalendar: React.FC<InvoicesCalendarProps> = ({
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+
+  // Google Calendar Integration
+  const [isCalendarConnected, setIsCalendarConnected] = useState(false);
+  const [calendarUserEmail, setCalendarUserEmail] = useState<string | null>(null);
+  const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = initGoogleCalendarAuth(
+      (user) => {
+        setIsCalendarConnected(true);
+        setCalendarUserEmail(user.email || 'Conectado');
+      },
+      () => {
+        setIsCalendarConnected(false);
+        setCalendarUserEmail(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const handleConnectGoogleCalendar = async () => {
+    try {
+      const res = await signInGoogleCalendar();
+      if (res) {
+        setIsCalendarConnected(true);
+        setCalendarUserEmail(res.user.email || 'Conectado');
+        alert('¡Conectado exitosamente con Google Calendar!');
+      }
+    } catch (err: any) {
+      console.error('Google Calendar login failed:', err);
+      alert('No se pudo conectar con Google Calendar.');
+    }
+  };
+
+  const handleSyncAllInvoicesToCalendar = async () => {
+    if (!isCalendarConnected) {
+      await handleConnectGoogleCalendar();
+      return;
+    }
+    const token = await getGoogleCalendarAccessToken();
+    if (!token) {
+      alert('Sesión de Google Calendar expirada. Por favor reconecte.');
+      setIsCalendarConnected(false);
+      return;
+    }
+
+    const confirmed = window.confirm(`¿Deseas exportar los ${invoices.length} vencimientos de facturas a tu Google Calendar principal?`);
+    if (!confirmed) return;
+
+    setIsSyncingCalendar(true);
+    try {
+      let count = 0;
+      for (const inv of invoices) {
+        if (inv.dueDate) {
+          await syncInvoiceToGoogleCalendar(inv, token);
+          count++;
+        }
+      }
+      alert(`¡Sincronización exitosa! Se exportaron ${count} vencimientos a tu Google Calendar.`);
+    } catch (err: any) {
+      console.error('Sync error:', err);
+      alert(`Error al sincronizar vencimientos: ${err.message || 'Error desconocido'}`);
+    } finally {
+      setIsSyncingCalendar(false);
+    }
+  };
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -191,7 +264,27 @@ export const InvoicesCalendar: React.FC<InvoicesCalendarProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleSyncAllInvoicesToCalendar}
+            disabled={isSyncingCalendar}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shadow-md cursor-pointer border ${
+              isCalendarConnected
+                ? 'bg-emerald-950/80 hover:bg-emerald-900/90 text-emerald-300 border-emerald-500/40'
+                : 'bg-slate-900 hover:bg-slate-800 text-blue-400 border-blue-500/30'
+            }`}
+            title="Sincroniza los vencimientos de facturas con tu aplicación Google Calendar"
+          >
+            <RefreshCw className={`w-4 h-4 ${isSyncingCalendar ? 'animate-spin' : ''}`} />
+            <span>
+              {isSyncingCalendar
+                ? 'Sincronizando...'
+                : isCalendarConnected
+                ? 'Google Calendar Activo'
+                : 'Conectar Google Calendar'}
+            </span>
+          </button>
+
           {onNavigateToInvoices && (
             <button
               onClick={onNavigateToInvoices}
@@ -534,7 +627,27 @@ export const InvoicesCalendar: React.FC<InvoicesCalendarProps> = ({
           isOpen={isFormOpen}
           onClose={() => setIsFormOpen(false)}
           suppliers={suppliers}
-          onSave={onSaveInvoice}
+          onSave={async (data) => {
+            const res = await onSaveInvoice(data);
+            if (isCalendarConnected && data.dueDate) {
+              const token = await getGoogleCalendarAccessToken();
+              if (token) {
+                try {
+                  await syncInvoiceToGoogleCalendar(
+                    {
+                      ...data,
+                      id: (res as string) || 'new-inv',
+                      status: data.status || 'pendiente',
+                    } as Invoice,
+                    token
+                  );
+                } catch (e) {
+                  console.warn('Auto-sync invoice to Google Calendar error:', e);
+                }
+              }
+            }
+            return res;
+          }}
         />
       )}
 

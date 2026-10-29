@@ -121,6 +121,15 @@ export interface WorkOrder {
   total: number;
   paymentMethod: string;
 
+  // Recepción Técnica & Inspección
+  assignedBay?: string;
+  assignedMechanic?: string;
+  checklist?: ReceptionChecklist;
+  damages?: DamageMark[];
+  courtesyChecks?: CourtesyCheck;
+  oilDispense?: OilDispenseConfig;
+  estimatedTimeMinutes?: number;
+
   // Otros
   notes?: string;
   nextServiceKm?: number;
@@ -130,6 +139,73 @@ export interface WorkOrder {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DamageMark {
+  id: string;
+  view: 'lateral_derecha' | 'lateral_izquierda' | 'superior_cristales' | 'trasera' | 'frontal';
+  x: number; // percentage 0-100
+  y: number; // percentage 0-100
+  type: 'rayon' | 'parabrisas_picado' | 'golpe' | 'otro';
+  description: string;
+}
+
+export interface ReceptionChecklist {
+  spareWheel?: boolean; // Rueda de auxilio presente (opcional)
+  fireExtinguisher?: boolean; // Matafuego con oblea vigente (opcional)
+  securityLugNutLocation?: string; // Tuerca de seguridad (opcional)
+  declaredValuables?: string; // Pertenencias de valor declaradas
+  fuelLevel: 'reserva' | '1/4' | '1/2' | '3/4' | 'lleno'; // Nivel de combustible
+}
+
+export interface CourtesyCheck {
+  brakeFluid: string; // ej: "1.2% H2O (Óptimo)"
+  coolant: string; // ej: "G12 Orgánico (-28°C)"
+  tirePressure: string; // ej: "32 PSI / 35 Aux"
+  greasingCardan: boolean; // Engrase de crucetas y cardán
+  obdDiagnostics?: boolean; // Diagnóstico OBD-II
+  brakePadsCheck?: boolean; // Revisión pastillas de freno
+}
+
+export interface OilDispenseConfig {
+  sourceType: 'tambor_granel' | 'bidon_cerrado';
+  drumId?: string;
+  liters: number;
+  crankcaseCapacity?: number;
+  oilViscosity?: string;
+  unitPricePerLiter?: number;
+}
+
+export type ServiceBayType = 'fosa' | 'elevador' | 'zona_fluidos' | 'alineacion';
+export type ServiceBayStatus = 'libre' | 'en_servicio' | 'drenando' | 'en_proceso' | 'finalizando';
+
+export interface ServiceBay {
+  id: string;
+  name: string; // "Fosa 1", "Fosa 2", "Elevador 1", "Elevador 2", "Zona Fluidos"
+  branchId: BranchId;
+  type: ServiceBayType;
+  status: ServiceBayStatus;
+  orderId?: string;
+  orderNumber?: string;
+  licensePlate?: string;
+  vehicleModel?: string;
+  mechanicName?: string;
+  taskDescription?: string;
+  progressPercent?: number;
+  estimatedMinutesLeft?: number;
+  updatedAt?: string;
+}
+
+export interface OilDrum {
+  id: string;
+  name: string; // "Shell Helix Ultra 5W-30", "Castrol Magnatec 10W-40"
+  viscosity: string;
+  capacityLiters: number; // 208
+  currentLiters: number; // 142
+  branchId: BranchId;
+  location: string; // "Pañol Fosa 1"
+  minLitersAlert: number; // 30
+  pricePerLiter: number;
 }
 
 export interface Product {
@@ -265,11 +341,33 @@ export interface ServiceAppointment {
   updatedAt: string;
 }
 
+export type BudgetTemplateStyle = 'modern_card' | 'classic_clean' | 'compact_bold' | 'executive_minimal';
+
+export interface BudgetFormatSettings {
+  headerTitle?: string;
+  headerSubtitle?: string;
+  headerCustomText?: string;
+  headerLogoPosition?: 'left' | 'center' | 'right' | 'hidden';
+  showBranchAddresses?: boolean;
+  accentColor?: string;
+  templateStyle?: BudgetTemplateStyle;
+  validityDaysText?: string;
+  footerNotes?: string;
+  customTerms?: string;
+  showSignatureBlock?: boolean;
+  showItemCode?: boolean;
+  showItemCategory?: boolean;
+  showUnitPrices?: boolean;
+  showVehicleKm?: boolean;
+}
+
 export interface CompanySettings {
   companyName: string;
   logoUrl?: string;
   phone: string;
   whatsapp: string;
+  whatsappEscobar?: string;
+  whatsappMaschwitz?: string;
   addressEscobar: string;
   addressMaschwitz: string;
   email: string;
@@ -282,6 +380,7 @@ export interface CompanySettings {
   googleDrivePriceListUrl?: string;
   defaultPriceMarginPercent?: number;
   lastPriceListSyncDate?: string;
+  budgetFormat?: BudgetFormatSettings;
 }
 
 export interface Supplier {

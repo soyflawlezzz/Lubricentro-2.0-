@@ -9,7 +9,7 @@ import {
 } from '../../utils/formatters';
 import { StatusBadge, TypeBadge, BranchBadge } from '../common/Badge';
 import { Modal } from '../common/Modal';
-import { Car, Clock, Fuel, Wrench, CheckCircle, FileSpreadsheet, ShoppingCart } from 'lucide-react';
+import { Car, Clock, Fuel, Wrench, CheckCircle, FileSpreadsheet, ShoppingCart, QrCode, ShieldCheck } from 'lucide-react';
 
 interface VehicleHistoryModalProps {
   isOpen: boolean;
@@ -20,6 +20,8 @@ interface VehicleHistoryModalProps {
   budgets: Budget[];
   sales: Sale[];
   onOpenWorkOrder?: (order: WorkOrder) => void;
+  onOpenSticker?: (vehicle?: Vehicle, latestOrder?: WorkOrder) => void;
+  onOpenPassport?: (plate: string) => void;
 }
 
 export const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({
@@ -31,6 +33,8 @@ export const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({
   budgets,
   sales,
   onOpenWorkOrder,
+  onOpenSticker,
+  onOpenPassport,
 }) => {
   if (!isOpen) return null;
 
@@ -100,6 +104,37 @@ export const VehicleHistoryModal: React.FC<VehicleHistoryModalProps> = ({
             <span className="text-2xl font-black text-emerald-400 font-mono mt-1 block">
               {formatCurrency(totalSpent)}
             </span>
+          </div>
+        </div>
+
+        {/* Quick Actions: Sticker QR & Digital Passport */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-400">Acciones del Vehículo:</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {onOpenSticker && (
+              <button
+                type="button"
+                onClick={() => onOpenSticker(vehicle, vehicleOrders[0])}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-md shadow-red-950/40 cursor-pointer"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span>Generar Sticker QR</span>
+              </button>
+            )}
+
+            {onOpenPassport && (
+              <button
+                type="button"
+                onClick={() => onOpenPassport(licensePlate)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-850 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold transition-colors cursor-pointer"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Ver Pasaporte Digital</span>
+              </button>
+            )}
           </div>
         </div>
 

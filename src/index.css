@@ -1,1 +1,44 @@
 @import "tailwindcss";
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Hide navigation, sidebar, headers and background UI during print */
+  header,
+  aside,
+  nav,
+  button,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* When printing the service sticker */
+  #printable-service-sticker {
+    visibility: visible !important;
+    position: fixed !important;
+    left: 50% !important;
+    top: 20px !important;
+    transform: translateX(-50%) !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: 2px solid #1e293b !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #printable-service-sticker * {
+    visibility: visible !important;
+  }
+
+  /* Printable passport and workshop sheets */
+  .printable-passport,
+  .printable-area {
+    visibility: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+}

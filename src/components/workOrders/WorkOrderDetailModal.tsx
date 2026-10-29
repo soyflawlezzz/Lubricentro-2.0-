@@ -24,10 +24,16 @@ import {
   Calculator,
   Copy,
   CheckCheck,
+  ShieldCheck,
+  Eye,
+  FileText,
+  CheckSquare,
+  QrCode,
 } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { StatusBadge, TypeBadge } from '../common/Badge';
 import { WORK_ORDER_CATEGORIES } from './WorkOrderForm';
+import { CarInspectionCanvas } from './CarInspectionCanvas';
 
 interface WorkOrderDetailModalProps {
   isOpen: boolean;
@@ -36,6 +42,8 @@ interface WorkOrderDetailModalProps {
   onUpdateStatus: (orderId: string, newStatus: WorkOrderStatus, note?: string) => Promise<void>;
   settings?: CompanySettings;
   onScheduleAppointment?: (order: WorkOrder) => void;
+  onOpenSticker?: (order: WorkOrder) => void;
+  onOpenPassport?: (plate: string) => void;
 }
 
 export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
@@ -45,16 +53,16 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
   onUpdateStatus,
   settings,
   onScheduleAppointment,
+  onOpenSticker,
+  onOpenPassport,
 }) => {
   const { profile, user } = useAuth();
   const [isUpdating, setIsUpdating] = useState(false);
   const [statusNote, setStatusNote] = useState('');
   const [copiedBreakdown, setCopiedBreakdown] = useState(false);
 
-  if (!order) return null;
-
   const categoryTotals = useMemo(() => {
-    if (!order.items || order.items.length === 0) return {};
+    if (!order?.items || order.items.length === 0) return {};
     const map: Record<string, { count: number; total: number }> = {};
     order.items.forEach((item) => {
       const rawCat = item.category === 'servicio' ? 'mano_de_obra' : (item.category || 'otro');
@@ -63,7 +71,9 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
       map[rawCat].total += Number(item.total) || 0;
     });
     return map;
-  }, [order.items]);
+  }, [order?.items]);
+
+  if (!order) return null;
 
   const handleCopyBreakdown = () => {
     const lines = [
@@ -153,11 +163,11 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
         {/* Printable Workshop Header */}
         <div className="hidden print:flex items-center justify-between pb-4 border-b-2 border-slate-900 text-slate-950">
           <div className="flex items-center gap-3">
-            {settings?.logoUrl ? (
-              <img src={settings.logoUrl} alt="Logo" className="h-12 w-auto max-w-[150px] object-contain" />
-            ) : (
-              <img src="/lubricentro-logo.svg" alt="Logo" className="h-12 w-auto max-w-[150px] object-contain" />
-            )}
+            <img
+              src={settings?.logoUrl || '/lubricentro-original-logo.png'}
+              alt="Logo"
+              className="h-12 w-auto max-w-[150px] object-contain"
+            />
             <div>
               <h2 className="text-xl font-black text-slate-950">{settings?.companyName || 'LUBRICENTRO 2.0'}</h2>
               <p className="text-xs text-slate-600">
@@ -179,6 +189,16 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
               <MapPin className="w-3 h-3 inline mr-1 text-red-500" />
               {formatBranchName(order.branchId)}
             </span>
+            {order.assignedBay && (
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-850 text-amber-300 border border-amber-800/40 font-medium">
+                🕳️ {order.assignedBay.replace('_', ' ').toUpperCase()}
+              </span>
+            )}
+            {order.assignedMechanic && (
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-950/60 text-indigo-300 border border-indigo-800/40 font-medium">
+                👤 Mecánico: {order.assignedMechanic}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -204,12 +224,35 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
                 <span>Agendar en Calendario</span>
               </button>
             )}
+            {onOpenSticker && (
+              <button
+                type="button"
+                onClick={() => onOpenSticker(order)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-md shadow-red-950/50 cursor-pointer"
+                title="Generar e imprimir sticker QR para el parabrisas"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span>Sticker QR</span>
+              </button>
+            )}
+            {onOpenPassport && (
+              <button
+                type="button"
+                onClick={() => onOpenPassport(order.licensePlate)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                title="Ver pasaporte digital del vehículo"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Pasaporte</span>
+              </button>
+            )}
             <button
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 text-xs font-bold transition-colors cursor-pointer"
+              title="Imprimir Hoja de Taller con checklist técnico y planilla para el mecánico de fosa"
             >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Imprimir Ficha</span>
+              <Printer className="w-3.5 h-3.5 text-red-400" />
+              <span>Hoja de Taller</span>
             </button>
           </div>
         </div>
@@ -274,6 +317,125 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Workshop Reception & Security Checklist */}
+        {order.checklist && (
+          <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between pb-1 border-b border-slate-850">
+              <div className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>Recepción Técnica & Resguardo del Vehículo</span>
+              </div>
+              <span className="text-[11px] font-mono text-slate-400">
+                Patente: {order.licensePlate}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+              {order.checklist.spareWheel !== undefined && (
+                <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <span className="text-[10px] text-slate-400 block mb-0.5">Rueda de Auxilio</span>
+                  <span className={`font-bold ${order.checklist.spareWheel ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {order.checklist.spareWheel ? '✓ Presente en baúl' : '✗ No posee / Ausente'}
+                  </span>
+                </div>
+              )}
+
+              {order.checklist.fireExtinguisher !== undefined && (
+                <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <span className="text-[10px] text-slate-400 block mb-0.5">Matafuego con Oblea</span>
+                  <span className={`font-bold ${order.checklist.fireExtinguisher ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {order.checklist.fireExtinguisher ? '✓ Oblea Vigente' : '⚠️ Vencido o sin carga'}
+                  </span>
+                </div>
+              )}
+
+              {order.checklist.securityLugNutLocation && (
+                <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <span className="text-[10px] text-slate-400 block mb-0.5">Tuerca Antirrobo</span>
+                  <span className="font-bold text-slate-200 truncate block">
+                    🔩 {order.checklist.securityLugNutLocation}
+                  </span>
+                </div>
+              )}
+
+              <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                <span className="text-[10px] text-slate-400 block mb-0.5">Nivel Combustible</span>
+                <span className="font-bold text-red-400 font-mono uppercase">
+                  ⛽ {order.checklist.fuelLevel}
+                </span>
+              </div>
+
+              {order.checklist.declaredValuables && (
+                <div className="col-span-2 sm:col-span-4 p-2 rounded-xl bg-slate-900/40 border border-slate-800/60 text-slate-300 text-xs flex items-center gap-2">
+                  <span className="text-slate-400 font-semibold shrink-0">Pertenencias declaradas:</span>
+                  <span className="truncate">{order.checklist.declaredValuables}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 360° Car Inspection Damages */}
+        {order.damages && order.damages.length > 0 && (
+          <CarInspectionCanvas
+            damages={order.damages}
+            onChange={() => {}}
+            readOnly={true}
+          />
+        )}
+
+        {/* Courtesy Checkpoints & Bulk Oil */}
+        {(order.courtesyChecks || order.oilDispense) && (
+          <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
+            <div className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between pb-1 border-b border-slate-850">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-red-500" />
+                Puntos de Control de Cortesía & Despacho
+              </span>
+              {order.oilDispense && (
+                <span className="text-[11px] font-mono font-bold text-amber-400">
+                  🛢️ {order.oilDispense.sourceType === 'tambor_granel' ? 'Tambor 208L (A Granel)' : 'Bidón Sellado'}: {order.oilDispense.liters}L
+                </span>
+              )}
+            </div>
+
+            {order.courtesyChecks && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">Líquido de Frenos:</span>
+                  <span className="font-bold text-emerald-400">{order.courtesyChecks.brakeFluid}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">Refrigerante:</span>
+                  <span className="font-bold text-cyan-300">{order.courtesyChecks.coolant}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">Presión Neumáticos:</span>
+                  <span className="font-bold text-slate-200">{order.courtesyChecks.tirePressure}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400">Engrase Cardán:</span>
+                  <span className="font-bold font-mono text-[11px] text-slate-300">
+                    {order.courtesyChecks.greasingCardan ? '✓ REALIZADO' : 'NO APLICA'}
+                  </span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400">Pastillas de Freno:</span>
+                  <span className="font-bold font-mono text-[11px] text-emerald-400">
+                    {order.courtesyChecks.brakePadsCheck ? '✓ VERIFICADO' : 'PENDIENTE'}
+                  </span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400">Escaneo OBD-II:</span>
+                  <span className="font-bold font-mono text-[11px] text-red-400">
+                    {order.courtesyChecks.obdDiagnostics ? '✓ REALIZADO' : 'NO SOLICITADO'}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Services & Technical Details */}
         <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-4">
@@ -567,6 +729,24 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
             </div>
           </div>
         )}
+
+        {/* Printable Technical Signatures */}
+        <div className="hidden print:grid grid-cols-2 gap-8 pt-8 mt-6 border-t-2 border-slate-900 text-slate-950">
+          <div className="text-center">
+            <div className="border-b border-slate-400 h-16 mb-2"></div>
+            <p className="text-xs font-bold uppercase">Firma del Mecánico Responsable</p>
+            <p className="text-[10px] text-slate-600">
+              {order.assignedMechanic || 'Operario de Fosa'} &bull; Control Técnico Finalizado
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="border-b border-slate-400 h-16 mb-2"></div>
+            <p className="text-xs font-bold uppercase">Conforme del Cliente / Retiro</p>
+            <p className="text-[10px] text-slate-600">
+              {order.clientName} &bull; DNI / Firma
+            </p>
+          </div>
+        </div>
       </div>
     </Modal>
   );

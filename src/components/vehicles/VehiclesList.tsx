@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Vehicle, WorkOrder, Budget, Sale } from '../../types';
 import { formatPlate, formatBranchName } from '../../utils/formatters';
 import { BranchBadge } from '../common/Badge';
-import { Search, Car, History, Wrench, Plus } from 'lucide-react';
+import { Search, Car, History, Wrench, Plus, QrCode } from 'lucide-react';
 import { VehicleHistoryModal } from './VehicleHistoryModal';
 
 interface VehiclesListProps {
@@ -12,6 +12,8 @@ interface VehiclesListProps {
   budgets: Budget[];
   sales: Sale[];
   onOpenWorkOrder?: (order: WorkOrder) => void;
+  onOpenSticker?: (vehicle: Vehicle) => void;
+  onOpenPassport?: (plate: string) => void;
 }
 
 export const VehiclesList: React.FC<VehiclesListProps> = ({
@@ -20,6 +22,8 @@ export const VehiclesList: React.FC<VehiclesListProps> = ({
   budgets,
   sales,
   onOpenWorkOrder,
+  onOpenSticker,
+  onOpenPassport,
 }) => {
   const { currentBranch } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,9 +31,6 @@ export const VehiclesList: React.FC<VehiclesListProps> = ({
 
   const filteredVehicles = useMemo(() => {
     return vehicles.filter((v) => {
-      if (currentBranch !== 'todas' && v.branchId && v.branchId !== currentBranch) {
-        return false;
-      }
       if (searchTerm.trim()) {
         const query = searchTerm.toLowerCase();
         const plate = (v.licensePlate || '').toLowerCase();
@@ -42,6 +43,9 @@ export const VehiclesList: React.FC<VehiclesListProps> = ({
           model.includes(query) ||
           client.includes(query)
         );
+      }
+      if (currentBranch !== 'todas' && v.branchId && v.branchId !== currentBranch) {
+        return false;
       }
       return true;
     });
@@ -132,9 +136,25 @@ export const VehiclesList: React.FC<VehiclesListProps> = ({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5 text-red-400 font-bold">
-                    <History className="w-4 h-4" />
-                    <span>{orderCount} OTs</span>
+                  <div className="flex items-center gap-2">
+                    {onOpenSticker && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenSticker(vehicle);
+                        }}
+                        className="p-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-300 transition-colors"
+                        title="Generar Sticker QR para parabrisas"
+                      >
+                        <QrCode className="w-3.5 h-3.5 text-red-400" />
+                      </button>
+                    )}
+
+                    <div className="flex items-center gap-1.5 text-red-400 font-bold">
+                      <History className="w-4 h-4" />
+                      <span>{orderCount} OTs</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -154,6 +174,12 @@ export const VehiclesList: React.FC<VehiclesListProps> = ({
           budgets={budgets}
           sales={sales}
           onOpenWorkOrder={onOpenWorkOrder}
+          onOpenSticker={(veh, latestOrder) => {
+            if (onOpenSticker) {
+              onOpenSticker(veh || activeVehicle || ({ licensePlate: selectedPlate } as any));
+            }
+          }}
+          onOpenPassport={onOpenPassport}
         />
       )}
     </div>

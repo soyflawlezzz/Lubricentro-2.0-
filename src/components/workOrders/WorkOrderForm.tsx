@@ -11,6 +11,10 @@ import {
   CompanySettings,
   Budget,
   Sale,
+  DamageMark,
+  ReceptionChecklist,
+  CourtesyCheck,
+  OilDispenseConfig,
 } from '../../types';
 import {
   Fuel,
@@ -33,11 +37,21 @@ import {
   Calculator,
   Sparkles,
   Tag,
+  ShieldCheck,
+  Gauge,
+  Clock,
+  Sliders,
+  CheckSquare,
+  Droplets,
+  ArrowRight,
+  ArrowLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { VehicleHistoryModal } from '../vehicles/VehicleHistoryModal';
 import { ProductSearchAutocomplete } from '../common/ProductSearchAutocomplete';
 import { formatCurrency } from '../../utils/formatters';
+import { CarInspectionCanvas } from './CarInspectionCanvas';
 
 export const WORK_ORDER_CATEGORIES: Array<{
   id: WorkOrderCategory;
@@ -190,6 +204,27 @@ export const WorkOrderForm: React.FC<WorkOrderFormProps> = ({
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [showPlateDropdown, setShowPlateDropdown] = useState(false);
 
+  // Active form section tab
+  type FormTab = 'vehiculo_cliente' | 'recepcion_taller' | 'repuestos_insumos' | 'cierre_totales';
+  const [activeTab, setActiveTab] = useState<FormTab>('vehiculo_cliente');
+
+  // Visual Inspection Points (Motor, Fluidos, Amortiguadores, Pastillas, Caja)
+  const [damages, setDamages] = useState<DamageMark[]>([]);
+
+  // Rapid Reception Checklist (fuel level and declared valuables)
+  const [checklist, setChecklist] = useState<ReceptionChecklist>({
+    declaredValuables: 'Sin pertenencias de valor declaradas',
+    fuelLevel: '1/2',
+  });
+
+  // Bulk Oil Dispenser (Drum 208L vs sealed bottle)
+  const [oilDispense, setOilDispense] = useState<OilDispenseConfig>({
+    sourceType: 'tambor_granel',
+    liters: 4.5,
+    oilViscosity: '5W-40 Sintético',
+    unitPricePerLiter: 9800,
+  });
+
   // Default initial services
   const defaultOilServices = [
     'Cambio de Aceite de Motor',
@@ -282,6 +317,9 @@ export const WorkOrderForm: React.FC<WorkOrderFormProps> = ({
         if (presetData.servicesSelected && presetData.servicesSelected.length > 0) {
           setSelectedServices(presetData.servicesSelected);
         }
+        if (presetData.damages) setDamages(presetData.damages);
+        if (presetData.checklist) setChecklist(presetData.checklist);
+        if (presetData.oilDispense) setOilDispense(presetData.oilDispense);
         if (presetData.items && presetData.items.length > 0) {
           setItems(presetData.items);
         } else if (presetData.total && presetData.total > 0) {
@@ -306,6 +344,7 @@ export const WorkOrderForm: React.FC<WorkOrderFormProps> = ({
   }, [isOpen, initialType, presetData]);
 
   const resetForm = () => {
+    setActiveTab('vehiculo_cliente');
     setClientId('');
     setClientName('');
     setClientPhone('');
@@ -332,6 +371,17 @@ export const WorkOrderForm: React.FC<WorkOrderFormProps> = ({
     setNotes('');
     setNextServiceKm(0);
     setNextServiceDate('');
+    setDamages([]);
+    setChecklist({
+      declaredValuables: 'Sin pertenencias de valor declaradas',
+      fuelLevel: '1/2',
+    });
+    setOilDispense({
+      sourceType: 'tambor_granel',
+      liters: 4.5,
+      oilViscosity: '5W-40 Sintético',
+      unitPricePerLiter: 9800,
+    });
     setFormError(null);
     setClientSearchQuery('');
     setShowClientDropdown(false);
@@ -604,6 +654,23 @@ export const WorkOrderForm: React.FC<WorkOrderFormProps> = ({
     }
   };
 
+  const handleAddBulkOilToItems = () => {
+    const liters = Number(oilDispense.liters) || 4;
+    const unitPrice = Number(oilDispense.unitPricePerLiter) || 9800;
+    const calcTotal = Math.round(liters * unitPrice);
+    const sourceLabel = oilDispense.sourceType === 'tambor_granel' ? 'Tambor 208L (A granel)' : 'Bidón Cerrado';
+    
+    const newItem: WorkOrderItem = {
+      id: `oil-dispense-${Date.now()}`,
+      description: `Aceite ${oilDispense.oilViscosity || 'Sintético'} (${sourceLabel})`,
+      category: 'aceite',
+      quantity: liters,
+      unitPrice: unitPrice,
+      total: calcTotal,
+    };
+    setItems((prev) => [...prev, newItem]);
+  };
+
   // Category totals
   const categoryTotals = useMemo(() => {
     const map: Record<string, { count: number; total: number }> = {
@@ -717,6 +784,9 @@ export const WorkOrderForm: React.FC<WorkOrderFormProps> = ({
         total: finalTotal,
         paymentMethod,
         notes: notes.trim(),
+        checklist,
+        damages,
+        oilDispense: type === 'aceite_filtro' ? oilDispense : undefined,
         nextServiceKm: nextServiceKm > 0 ? Number(nextServiceKm) : undefined,
         nextServiceDate: nextServiceDate || undefined,
         statusHistory: [
@@ -821,6 +891,82 @@ export const WorkOrderForm: React.FC<WorkOrderFormProps> = ({
           </div>
         </div>
 
+        {/* Navigation Tabs Bar */}
+        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-950 border border-slate-800 overflow-x-auto scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setActiveTab('vehiculo_cliente')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'vehiculo_cliente'
+                ? 'bg-red-600 text-white shadow-md shadow-red-950/50'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            <Car className="w-3.5 h-3.5" />
+            <span>1. Vehículo & Cliente</span>
+            {licensePlate && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-black/40 font-mono text-red-200 uppercase font-black">
+                {licensePlate}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('recepcion_taller')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'recepcion_taller'
+                ? 'bg-red-600 text-white shadow-md shadow-red-950/50'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>2. Recepción & Inspección Visual</span>
+            {damages.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-300 font-mono font-bold">
+                {damages.length} punto(s)
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('repuestos_insumos')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'repuestos_insumos'
+                ? 'bg-red-600 text-white shadow-md shadow-red-950/50'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>3. Repuestos & Insumos</span>
+            {items.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/30 text-emerald-300 font-mono font-bold">
+                {items.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('cierre_totales')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'cierre_totales'
+                ? 'bg-red-600 text-white shadow-md shadow-red-950/50'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            <Calculator className="w-3.5 h-3.5" />
+            <span>4. Cierre & Totales</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-950/80 text-emerald-400 font-mono font-bold">
+              {formatCurrency(grandItemsTotal > 0 ? grandItemsTotal : total)}
+            </span>
+          </button>
+        </div>
+
+        {/* TAB 1: VEHÍCULO & CLIENTE */}
+        {activeTab === 'vehiculo_cliente' && (
+          <div className="space-y-6">
         {/* Section 1: Vehículo */}
         <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-slate-850">
@@ -1202,6 +1348,230 @@ export const WorkOrderForm: React.FC<WorkOrderFormProps> = ({
           </div>
         </div>
 
+            {/* Next tab button from Tab 1 */}
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('recepcion_taller')}
+                className="px-4 py-2.5 rounded-xl bg-slate-850 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-2 border border-slate-700 transition-all cursor-pointer"
+              >
+                <span>Continuar a Recepción 360° & Taller</span>
+                <ArrowRight className="w-3.5 h-3.5 text-red-400" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: RECEPCIÓN & INSPECCIÓN VISUAL */}
+        {activeTab === 'recepcion_taller' && (
+          <div className="space-y-6">
+            {/* Reception Checklist */}
+            <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between pb-1 border-b border-slate-850">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                  Checklist Rápido de Ingreso
+                </h3>
+                <span className="text-[11px] text-slate-400">
+                  Resguardo de combustible y pertenencias declaradas
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {/* Nivel de Combustible */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1">
+                    Nivel de Combustible Recibido
+                  </label>
+                  <div className="grid grid-cols-5 gap-1">
+                    {(['reserva', '1/4', '1/2', '3/4', 'lleno'] as const).map((lvl) => (
+                      <button
+                        key={lvl}
+                        type="button"
+                        onClick={() =>
+                          setChecklist((prev) => ({ ...prev, fuelLevel: lvl }))
+                        }
+                        className={`py-1.5 px-1 rounded-lg text-[10px] font-bold uppercase transition-colors cursor-pointer text-center ${
+                          checklist.fuelLevel === lvl
+                            ? 'bg-red-600 text-white font-mono'
+                            : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                        }`}
+                      >
+                        {lvl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Pertenencias de Valor */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1">
+                    Pertenencias u Objetos de Valor Declarados
+                  </label>
+                  <input
+                    type="text"
+                    value={checklist.declaredValuables}
+                    onChange={(e) =>
+                      setChecklist((prev) => ({
+                        ...prev,
+                        declaredValuables: e.target.value,
+                      }))
+                    }
+                    placeholder="Ej: Sin objetos de valor / Gafas de sol en guantera"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-hidden focus:border-red-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Inspección Visual de los 5 puntos (Motor, Fluidos, Amortiguadores, Pastillas, Caja Automática) */}
+            <CarInspectionCanvas damages={damages} onChange={setDamages} />
+
+            {/* Navigation buttons */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('vehiculo_cliente')}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-bold flex items-center gap-2 border border-slate-800 transition-all cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Volver a Vehículo & Cliente</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('repuestos_insumos')}
+                className="px-4 py-2.5 rounded-xl bg-slate-850 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-2 border border-slate-700 transition-all cursor-pointer"
+              >
+                <span>Continuar a Repuestos & Insumos</span>
+                <ArrowRight className="w-3.5 h-3.5 text-red-400" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: REPUESTOS & INSUMOS */}
+        {activeTab === 'repuestos_insumos' && (
+          <div className="space-y-6">
+            {/* Bulk Oil Dispenser & Filter Codes for Aceite & Filtro */}
+            {type === 'aceite_filtro' && (
+              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-slate-850">
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-red-500" />
+                    Despacho de Aceite & Códigos de Filtros
+                  </h3>
+                  <span className="text-[11px] text-amber-400 font-semibold flex items-center gap-1">
+                    <Fuel className="w-3.5 h-3.5" />
+                    Despachador Inteligente
+                  </span>
+                </div>
+
+                {/* Bulk Drum Dispenser Box */}
+                <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-800/40 space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                      <span>🛢️</span> Configurar Carga de Aceite
+                    </span>
+                    <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOilDispense((prev) => ({ ...prev, sourceType: 'tambor_granel' }))
+                        }
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                          oilDispense.sourceType === 'tambor_granel'
+                            ? 'bg-amber-600 text-white'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Tambor 208L (A Granel)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOilDispense((prev) => ({ ...prev, sourceType: 'bidon_cerrado' }))
+                        }
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                          oilDispense.sourceType === 'bidon_cerrado'
+                            ? 'bg-amber-600 text-white'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Bidón Sellado (1L/4L)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                        Litros Exactos
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.5"
+                        value={oilDispense.liters}
+                        onChange={(e) =>
+                          setOilDispense((prev) => ({
+                            ...prev,
+                            liters: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono font-bold text-white focus:outline-hidden focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                        Viscosidad / Tipo
+                      </label>
+                      <input
+                        type="text"
+                        value={oilDispense.oilViscosity || ''}
+                        onChange={(e) =>
+                          setOilDispense((prev) => ({
+                            ...prev,
+                            oilViscosity: e.target.value,
+                          }))
+                        }
+                        placeholder="Ej: 5W-40 Sintético"
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-hidden focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                        Precio x Litro ($)
+                      </label>
+                      <input
+                        type="number"
+                        value={oilDispense.unitPricePerLiter || 9800}
+                        onChange={(e) =>
+                          setOilDispense((prev) => ({
+                            ...prev,
+                            unitPricePerLiter: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono text-emerald-400 focus:outline-hidden focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={handleAddBulkOilToItems}
+                        className="w-full py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-md shadow-amber-950/40 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Cargar Aceite ({formatCurrency((oilDispense.liters || 0) * (oilDispense.unitPricePerLiter || 0))})</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
         {/* Section 4: Aceite y Filtros - Códigos y Marcas (If Aceite & Filtro) */}
         {type === 'aceite_filtro' && (
           <div>
@@ -1536,72 +1906,149 @@ export const WorkOrderForm: React.FC<WorkOrderFormProps> = ({
           </div>
         </div>
 
-        {/* Section 5: Totales, Pagos, Notas y Fecha Próximo Service */}
-        <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
-              Fecha Estimada Próximo Service
-            </label>
-            <input
-              type="date"
-              value={nextServiceDate}
-              onChange={(e) => setNextServiceDate(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white focus:outline-hidden focus:border-red-500"
-            />
+            {/* Navigation buttons for Tab 3 */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('recepcion_taller')}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-bold flex items-center gap-2 border border-slate-800 transition-all cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Volver a Recepción 360°</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('cierre_totales')}
+                className="px-4 py-2.5 rounded-xl bg-slate-850 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-2 border border-slate-700 transition-all cursor-pointer"
+              >
+                <span>Continuar a Cierre & Totales</span>
+                <ArrowRight className="w-3.5 h-3.5 text-red-400" />
+              </button>
+            </div>
           </div>
+        )}
 
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
-              Medio de Pago
-            </label>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white focus:outline-hidden focus:border-red-500"
-            >
-              {(settings?.paymentMethods || [
-                'Efectivo',
-                'Transferencia Bancaria',
-                'Débito',
-                'Crédito',
-                'Mercado Pago',
-                'Otro',
-              ]).map((pm) => (
-                <option key={pm} value={pm}>
-                  {pm}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* TAB 4: CIERRE & TOTALES */}
+        {activeTab === 'cierre_totales' && (
+          <div className="space-y-6">
+            {/* Quick Recap Card */}
+            <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Vehículo</span>
+                <span className="font-bold text-white block truncate">
+                  {vehicleBrand || '-'} {vehicleModel || '-'}
+                </span>
+                <span className="block font-mono text-red-400 font-bold">{licensePlate || 'SIN PATENTE'}</span>
+              </div>
 
-          <div className="lg:col-span-2">
-            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
-              Importe Total ($ ARS) *
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="any"
-              value={total || ''}
-              onChange={(e) => setTotal(Number(e.target.value))}
-              placeholder="0"
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-base sm:text-lg font-black text-emerald-400 focus:outline-hidden focus:border-emerald-500 font-mono"
-            />
-          </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Cliente</span>
+                <span className="font-bold text-white truncate block">{clientName || 'Sin asignar'}</span>
+                <span className="text-slate-400 font-mono text-[11px]">{clientPhone || clientWhatsapp || '-'}</span>
+              </div>
 
-          <div className="sm:col-span-2 lg:col-span-4">
-            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
-              Observaciones / Notas del Trabajo
-            </label>
-            <textarea
-              rows={2}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Detalles técnicos, estado de los frenos, repuestos a tener en cuenta, etc."
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder-slate-600 focus:outline-hidden focus:border-red-500"
-            />
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Inspección Visual</span>
+                <span className="font-bold text-emerald-400 block">
+                  {damages.length === 0 ? '✓ Sin novedades' : `⚠️ ${damages.length} punto(s) marcado(s)`}
+                </span>
+                <span className="block text-[11px] text-slate-400">{items.length} ítems desglosados</span>
+              </div>
+            </div>
+
+            {/* Section 5: Totales, Pagos, Notas y Fecha Próximo Service */}
+            <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
+                  KM Estimado Próximo Service
+                </label>
+                <input
+                  type="number"
+                  value={nextServiceKm || ''}
+                  onChange={(e) => setNextServiceKm(Number(e.target.value))}
+                  placeholder={currentKm ? String(currentKm + 10000) : '130000'}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white focus:outline-hidden focus:border-red-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
+                  Fecha Estimada Próximo Service
+                </label>
+                <input
+                  type="date"
+                  value={nextServiceDate}
+                  onChange={(e) => setNextServiceDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white focus:outline-hidden focus:border-red-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
+                  Medio de Pago
+                </label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white focus:outline-hidden focus:border-red-500"
+                >
+                  {(settings?.paymentMethods || [
+                    'Efectivo',
+                    'Transferencia Bancaria',
+                    'Débito',
+                    'Crédito',
+                    'Mercado Pago',
+                    'Otro',
+                  ]).map((pm) => (
+                    <option key={pm} value={pm}>
+                      {pm}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
+                  Importe Total ($ ARS) *
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={grandItemsTotal > 0 ? grandItemsTotal : (total || '')}
+                  onChange={(e) => setTotal(Number(e.target.value))}
+                  placeholder="0"
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-base sm:text-lg font-black text-emerald-400 focus:outline-hidden focus:border-emerald-500 font-mono"
+                />
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-4">
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
+                  Observaciones / Notas del Trabajo
+                </label>
+                <textarea
+                  rows={2}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Detalles técnicos, estado de los frenos, repuestos a tener en cuenta, etc."
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder-slate-600 focus:outline-hidden focus:border-red-500"
+                />
+              </div>
+            </div>
+
+            {/* Navigation button for Tab 4 */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('repuestos_insumos')}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-bold flex items-center gap-2 border border-slate-800 transition-all cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Volver a Repuestos & Insumos</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Buttons */}
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">

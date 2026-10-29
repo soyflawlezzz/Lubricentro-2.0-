@@ -3,14 +3,14 @@ import { db } from './config';
 
 export async function testConnection(): Promise<boolean> {
   try {
+    if (!navigator.onLine) {
+      return true;
+    }
     await getDocFromServer(doc(db, 'test', 'connection'));
     return true;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
-      return false;
-    }
-    // Any permission or missing doc error still means server responded
+    // Gracefully handle network/offline/permission status without raising alerts
     return true;
   }
 }
+

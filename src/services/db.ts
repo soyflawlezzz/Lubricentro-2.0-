@@ -72,7 +72,7 @@ export function cleanFirestoreData<T extends Record<string, any>>(data: T): Reco
 // 1. WORK ORDERS
 // ========================
 export function subscribeWorkOrders(
-  branchId: BranchId,
+  branchId: BranchId | undefined,
   callback: (orders: WorkOrder[]) => void,
   onError?: (err: any) => void
 ) {
@@ -86,10 +86,6 @@ export function subscribeWorkOrders(
           id: d.id,
           ...d.data(),
         })) as WorkOrder[];
-
-        if (branchId && branchId !== 'todas') {
-          list = list.filter((item) => item.branchId === branchId);
-        }
 
         // Sort by createdAt desc
         list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
@@ -197,7 +193,7 @@ export async function deleteWorkOrder(orderId: string) {
 // 2. CLIENTS
 // ========================
 export function subscribeClients(
-  branchId: BranchId,
+  branchId: BranchId | undefined,
   callback: (clients: Client[]) => void
 ) {
   const collPath = 'clients';
@@ -210,9 +206,8 @@ export function subscribeClients(
           ...d.data(),
         })) as Client[];
 
-        if (branchId && branchId !== 'todas') {
-          list = list.filter((c) => c.branchId === branchId || !c.branchId);
-        }
+        // Keep active clients
+        list = list.filter((c) => c.active !== false);
 
         list.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
         callback(list);
@@ -272,7 +267,7 @@ export async function deleteClient(clientId: string) {
 // 3. VEHICLES
 // ========================
 export function subscribeVehicles(
-  branchId: BranchId,
+  branchId: BranchId | undefined,
   callback: (vehicles: Vehicle[]) => void
 ) {
   const collPath = 'vehicles';
@@ -285,9 +280,7 @@ export function subscribeVehicles(
           ...d.data(),
         })) as Vehicle[];
 
-        if (branchId && branchId !== 'todas') {
-          list = list.filter((v) => v.branchId === branchId || !v.branchId);
-        }
+        list = list.filter((v) => v.active !== false);
 
         list.sort((a, b) => (a.licensePlate || '').localeCompare(b.licensePlate || ''));
         callback(list);
@@ -319,6 +312,62 @@ export async function createVehicle(data: Omit<Vehicle, 'id' | 'createdAt' | 'up
   }
 }
 
+/**
+ * Fetches vehicle record and all historical work orders for the QR passport scan.
+ */
+export async function getVehiclePassportData(licensePlate: string): Promise<{ vehicle?: Vehicle; workOrders: WorkOrder[] }> {
+  try {
+    const cleanPlate = (licensePlate || '').trim().toUpperCase();
+    if (!cleanPlate) return { workOrders: [] };
+
+    let vehicle: Vehicle | undefined;
+    try {
+      const vehSnap = await getDocs(
+        query(collection(db, 'vehicles'), where('licensePlate', '==', cleanPlate))
+      );
+      if (!vehSnap.empty) {
+        vehicle = { id: vehSnap.docs[0].id, ...(vehSnap.docs[0].data() as Omit<Vehicle, 'id'>) };
+      }
+    } catch (e) {
+      console.warn('Vehicle query warning:', e);
+    }
+
+    const workOrders: WorkOrder[] = [];
+    try {
+      const ordersSnap = await getDocs(
+        query(collection(db, 'workOrders'), where('licensePlate', '==', cleanPlate))
+      );
+      ordersSnap.docs.forEach((d) => {
+        workOrders.push({ id: d.id, ...(d.data() as Omit<WorkOrder, 'id'>) });
+      });
+    } catch (e) {
+      console.warn('Work orders query warning:', e);
+    }
+
+    // Fallback scan if query missed any non-normalized uppercase plate
+    if (workOrders.length === 0) {
+      try {
+        const woAllSnap = await getDocs(collection(db, 'workOrders'));
+        woAllSnap.docs.forEach((d) => {
+          const data = d.data() as WorkOrder;
+          if (data.licensePlate && data.licensePlate.trim().toUpperCase() === cleanPlate) {
+            workOrders.push({ ...data, id: d.id });
+          }
+        });
+      } catch (err) {
+        console.warn('Fallback wo query warning:', err);
+      }
+    }
+
+    workOrders.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+    return { vehicle, workOrders };
+  } catch (err) {
+    console.error('Error fetching vehicle passport data:', err);
+    return { workOrders: [] };
+  }
+}
+
 export async function updateVehicle(vehicleId: string, updates: Partial<Vehicle>) {
   const path = `vehicles/${vehicleId}`;
   try {
@@ -330,6 +379,16 @@ export async function updateVehicle(vehicleId: string, updates: Partial<Vehicle>
     await updateDoc(doc(db, 'vehicles', vehicleId), cleanUpdates);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
+    throw error;
+  }
+}
+
+export async function deleteVehicle(vehicleId: string) {
+  const path = `vehicles/${vehicleId}`;
+  try {
+    await deleteDoc(doc(db, 'vehicles', vehicleId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
     throw error;
   }
 }
@@ -467,7 +526,7 @@ export async function createSale(data: Omit<Sale, 'id' | 'createdAt'>): Promise<
 // 6. BUDGETS (PRESUPUESTOS)
 // ========================
 export function subscribeBudgets(
-  branchId: BranchId,
+  branchId: BranchId | undefined,
   callback: (budgets: Budget[]) => void
 ) {
   const collPath = 'budgets';
@@ -479,10 +538,6 @@ export function subscribeBudgets(
           id: d.id,
           ...d.data(),
         })) as Budget[];
-
-        if (branchId && branchId !== 'todas') {
-          list = list.filter((b) => b.branchId === branchId);
-        }
 
         list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         callback(list);
@@ -588,10 +643,10 @@ export async function deleteExpense(expenseId: string) {
 }
 
 // ========================
-// 8. REMINDERS (RECORDATORIOS)
+// 8. REMINDERS (RECORDATORIOS / PRÓXIMOS SERVICES)
 // ========================
 export function subscribeReminders(
-  branchId: BranchId,
+  branchId: BranchId | undefined,
   callback: (reminders: Reminder[]) => void
 ) {
   const collPath = 'reminders';
@@ -603,10 +658,6 @@ export function subscribeReminders(
           id: d.id,
           ...d.data(),
         })) as Reminder[];
-
-        if (branchId && branchId !== 'todas') {
-          list = list.filter((r) => r.branchId === branchId);
-        }
 
         list.sort((a, b) => (a.estimatedDate || '').localeCompare(b.estimatedDate || ''));
         callback(list);
@@ -653,16 +704,37 @@ export async function deleteReminder(reminderId: string) {
 // ========================
 export function subscribeSettings(callback: (settings: CompanySettings) => void) {
   const docPath = 'settings/general';
+
+  // Immediately notify from local storage if available for instant UI responsiveness
+  try {
+    const cached = localStorage.getItem('lubricentro_settings');
+    if (cached) {
+      callback({ ...DEFAULT_SETTINGS, ...JSON.parse(cached) });
+    }
+  } catch (e) {
+    console.error('Error loading cached settings:', e);
+  }
+
   try {
     return onSnapshot(
       doc(db, 'settings', 'general'),
       (snapshot) => {
         if (snapshot.exists()) {
-          callback(snapshot.data() as CompanySettings);
+          const data = snapshot.data() as CompanySettings;
+          const merged = { ...DEFAULT_SETTINGS, ...data };
+          try {
+            localStorage.setItem('lubricentro_settings', JSON.stringify(merged));
+          } catch (e) {}
+          callback(merged);
         } else {
           // Initialize if missing
           setDoc(doc(db, 'settings', 'general'), DEFAULT_SETTINGS)
-            .then(() => callback(DEFAULT_SETTINGS))
+            .then(() => {
+              try {
+                localStorage.setItem('lubricentro_settings', JSON.stringify(DEFAULT_SETTINGS));
+              } catch (e) {}
+              callback(DEFAULT_SETTINGS);
+            })
             .catch((e) => console.error('Error seeding settings:', e));
         }
       },
@@ -677,6 +749,17 @@ export function subscribeSettings(callback: (settings: CompanySettings) => void)
 
 export async function updateSettings(settings: Partial<CompanySettings>) {
   const path = 'settings/general';
+
+  // Save to local cache immediately
+  try {
+    const cached = localStorage.getItem('lubricentro_settings');
+    const existing = cached ? JSON.parse(cached) : DEFAULT_SETTINGS;
+    const merged = { ...existing, ...settings };
+    localStorage.setItem('lubricentro_settings', JSON.stringify(merged));
+  } catch (e) {
+    console.error('Error caching settings to localStorage:', e);
+  }
+
   try {
     await setDoc(doc(db, 'settings', 'general'), cleanFirestoreData(settings), { merge: true });
   } catch (error) {
@@ -842,33 +925,11 @@ export async function seedInitialDatabaseIfEmpty() {
       await setDoc(doc(db, 'settings', 'general'), DEFAULT_SETTINGS);
     }
 
-    // Check suppliers
-    const suppSnap = await getDocs(collection(db, 'suppliers'));
-    if (suppSnap.empty) {
-      console.log('Seeding initial suppliers...');
-      const createdSupplierMap: Record<string, string> = {};
-      for (const supp of INITIAL_SUPPLIERS) {
-        const ref = await addDoc(collection(db, 'suppliers'), {
-          ...supp,
-          createdAt: getNowIso(),
-          updatedAt: getNowIso(),
-        });
-        createdSupplierMap[supp.name] = ref.id;
-      }
-
-      // Check invoices
-      const invSnap = await getDocs(collection(db, 'invoices'));
-      if (invSnap.empty) {
-        console.log('Seeding initial invoices...');
-        for (const inv of INITIAL_INVOICES) {
-          await addDoc(collection(db, 'invoices'), {
-            ...inv,
-            supplierId: createdSupplierMap[inv.supplierName] || '',
-            createdAt: getNowIso(),
-            updatedAt: getNowIso(),
-          });
-        }
-      }
+    // Auto seed sample clients and budgets if clients database is empty
+    const clientsSnap = await getDocs(collection(db, 'clients'));
+    if (clientsSnap.empty) {
+      console.log('Database empty: Seeding sample clients and budgets...');
+      await restoreSampleData();
     }
   } catch (e) {
     console.warn('Database seed check complete or pending permissions:', e);
@@ -1004,3 +1065,279 @@ export async function clearCatalogAndInvoicesDatabase() {
   }
 }
 
+// Direct hard pull from Firestore for Clients and Vehicles
+export async function fetchDirectClientsAndVehicles(): Promise<{
+  clients: Client[];
+  vehicles: Vehicle[];
+}> {
+  try {
+    const clientsSnap = await getDocs(collection(db, 'clients'));
+    const clients: Client[] = clientsSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as Client))
+      .filter((c) => c.active !== false)
+      .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+
+    const vehiclesSnap = await getDocs(collection(db, 'vehicles'));
+    const vehicles: Vehicle[] = vehiclesSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as Vehicle))
+      .filter((v) => v.active !== false)
+      .sort((a, b) => (a.licensePlate || '').localeCompare(b.licensePlate || ''));
+
+    return { clients, vehicles };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, 'clients-vehicles-pull');
+    throw error;
+  }
+}
+
+/**
+ * Restores initial sample Clients, Vehicles, Budgets, and Appointments to Firestore
+ */
+export async function restoreSampleData(): Promise<{
+  clientsCount: number;
+  vehiclesCount: number;
+  budgetsCount: number;
+}> {
+  try {
+    const now = getNowIso();
+    const todayStr = now.split('T')[0];
+
+    // 1. Create Sample Clients
+    const client1Id = await createClient({
+      fullName: 'Juan Carlos Pérez',
+      documentNumber: '28492019',
+      phone: '1164884571',
+      whatsapp: '5491164884571',
+      email: 'jcperez@gmail.com',
+      address: 'Av. San Martín 450, Belén de Escobar',
+      notes: 'Cliente habitual. Prefiere aceite sintético Shell Helix 5W30.',
+      branchId: 'escobar',
+      active: true,
+    });
+
+    const client2Id = await createClient({
+      fullName: 'María Laura González',
+      documentNumber: '32901844',
+      phone: '1154329876',
+      whatsapp: '5491154329876',
+      email: 'mlaurag@hotmail.com',
+      address: 'Calle Mendoza 1220, Ing. Maschwitz',
+      notes: 'Consultó por presupuestos de suspensión y frenos.',
+      branchId: 'maschwitz',
+      active: true,
+    });
+
+    const client3Id = await createClient({
+      fullName: 'Esteban Rodríguez',
+      documentNumber: '30192833',
+      phone: '1133221100',
+      whatsapp: '5491133221100',
+      address: 'Calle Tapia de Cruz 890, Escobar',
+      branchId: 'escobar',
+      active: true,
+    });
+
+    const client4Id = await createClient({
+      fullName: 'Transporte Rápido S.A.',
+      documentNumber: '30-71234567-8',
+      phone: '1164884571',
+      whatsapp: '5491164884571',
+      email: 'logistica@transporterapido.com',
+      address: 'Colectora Este KM 48, Escobar',
+      notes: 'Flotas comerciales. Requiere factura A.',
+      branchId: 'escobar',
+      active: true,
+    });
+
+    // 2. Create Sample Vehicles
+    await createVehicle({
+      licensePlate: 'AF123JK',
+      brand: 'Volkswagen',
+      model: 'Amarok 2.0 TDI Comfortline',
+      year: 2022,
+      currentKm: 65400,
+      lastServiceKm: 55000,
+      clientId: client1Id,
+      clientName: 'Juan Carlos Pérez',
+      branchId: 'escobar',
+      active: true,
+    });
+
+    await createVehicle({
+      licensePlate: 'AA987ZZ',
+      brand: 'Ford',
+      model: 'Ranger 3.2 Limited 4x4',
+      year: 2020,
+      currentKm: 82100,
+      lastServiceKm: 70000,
+      clientId: client2Id,
+      clientName: 'María Laura González',
+      branchId: 'maschwitz',
+      active: true,
+    });
+
+    await createVehicle({
+      licensePlate: 'AB456CD',
+      brand: 'Toyota',
+      model: 'Hilux SRV 2.8 TDI',
+      year: 2021,
+      currentKm: 94500,
+      lastServiceKm: 85000,
+      clientId: client3Id,
+      clientName: 'Esteban Rodríguez',
+      branchId: 'escobar',
+      active: true,
+    });
+
+    await createVehicle({
+      licensePlate: 'AC789EF',
+      brand: 'Mercedes-Benz',
+      model: 'Sprinter 311 CDI Furgón',
+      year: 2019,
+      currentKm: 145000,
+      lastServiceKm: 135000,
+      clientId: client4Id,
+      clientName: 'Transporte Rápido S.A.',
+      branchId: 'escobar',
+      active: true,
+    });
+
+    // 3. Create Sample Budgets
+    await createBudget({
+      budgetNumber: 'P-00101',
+      clientName: 'Juan Carlos Pérez',
+      clientPhone: '1164884571',
+      clientWhatsapp: '5491164884571',
+      licensePlate: 'AF123JK',
+      vehicleBrand: 'Volkswagen',
+      vehicleModel: 'Amarok 2.0 TDI',
+      vehicleYear: 2022,
+      items: [
+        {
+          id: 'bitem-1',
+          description: 'Service Completo Aceite Sintético 5W30 + Filtros (Aceite, Aire, Combustible, Habitáculo)',
+          quantity: 1,
+          unitPrice: 68500,
+          totalPrice: 68500,
+          category: 'aceite_filtro',
+        },
+        {
+          id: 'bitem-2',
+          description: 'Revisión y Cambio de Pastillas de Freno Delanteras',
+          quantity: 1,
+          unitPrice: 32000,
+          totalPrice: 32000,
+          category: 'mecanica',
+        },
+      ],
+      total: 100500,
+      status: 'pendiente',
+      observations: 'Presupuesto enviado por WhatsApp. Pendiente de confirmación de turno.',
+      branchId: 'escobar',
+    });
+
+    await createBudget({
+      budgetNumber: 'P-00102',
+      clientName: 'María Laura González',
+      clientPhone: '1154329876',
+      clientWhatsapp: '5491154329876',
+      licensePlate: 'AA987ZZ',
+      vehicleBrand: 'Ford',
+      vehicleModel: 'Ranger 3.2 Limited',
+      vehicleYear: 2020,
+      items: [
+        {
+          id: 'bitem-3',
+          description: 'Cambio de Amortiguadores Delanteros y Bieletas de Estabilizadora',
+          quantity: 1,
+          unitPrice: 84000,
+          totalPrice: 84000,
+          category: 'mecanica',
+        },
+        {
+          id: 'bitem-4',
+          description: 'Alineación 3D Computarizada y Balanceo de las 4 Ruedas',
+          quantity: 1,
+          unitPrice: 18000,
+          totalPrice: 18000,
+          category: 'mecanica',
+        },
+      ],
+      total: 102000,
+      status: 'aprobado',
+      observations: 'Aprobado por cliente vía WhatsApp. Programando fecha de trabajo.',
+      branchId: 'maschwitz',
+    });
+
+    await createBudget({
+      budgetNumber: 'P-00103',
+      clientName: 'Esteban Rodríguez',
+      clientPhone: '1133221100',
+      clientWhatsapp: '5491133221100',
+      licensePlate: 'AB456CD',
+      vehicleBrand: 'Toyota',
+      vehicleModel: 'Hilux SRV 2.8',
+      vehicleYear: 2021,
+      items: [
+        {
+          id: 'bitem-5',
+          description: 'Kit de Distribución + Bomba de Agua + Correa Poly-V y Tensor',
+          quantity: 1,
+          unitPrice: 125000,
+          totalPrice: 125000,
+          category: 'mecanica',
+        },
+        {
+          id: 'bitem-6',
+          description: 'Reemplazo Aceite de Diferencial Trasero y Delantero (75W90 Synthetic)',
+          quantity: 1,
+          unitPrice: 42000,
+          totalPrice: 42000,
+          category: 'aceite_filtro',
+        },
+      ],
+      total: 167000,
+      status: 'pendiente',
+      observations: 'Cotización solicitada para service de los 95.000 KM.',
+      branchId: 'escobar',
+    });
+
+    // 4. Create Sample Appointments
+    await createAppointment({
+      clientName: 'María Laura González',
+      clientPhone: '1154329876',
+      clientWhatsapp: '5491154329876',
+      licensePlate: 'AA987ZZ',
+      vehicleBrand: 'Ford',
+      vehicleModel: 'Ranger 3.2',
+      vehicleYear: 2020,
+      date: todayStr,
+      time: '10:30',
+      serviceType: 'mecanica_integral',
+      status: 'confirmado',
+      branchId: 'maschwitz',
+      notes: 'Presupuesto #P-00102 aprobado. Realización de cambio de amortiguadores.',
+    });
+
+    await createAppointment({
+      clientName: 'Juan Carlos Pérez',
+      clientPhone: '1164884571',
+      clientWhatsapp: '5491164884571',
+      licensePlate: 'AF123JK',
+      vehicleBrand: 'Volkswagen',
+      vehicleModel: 'Amarok 2.0 TDI',
+      vehicleYear: 2022,
+      date: todayStr,
+      time: '15:00',
+      serviceType: 'aceite_filtro',
+      status: 'pendiente',
+      branchId: 'escobar',
+      notes: 'Service de aceite y filtros + revisión de pastillas de freno.',
+    });
+
+    return { clientsCount: 4, vehiclesCount: 4, budgetsCount: 3 };
+  } catch (error) {
+    console.error('Error restoring sample data:', error);
+    throw error;
+  }
+}

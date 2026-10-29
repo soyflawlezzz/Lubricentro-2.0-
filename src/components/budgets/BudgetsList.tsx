@@ -17,6 +17,7 @@ import {
   CheckCircle,
   MessageCircle,
   Download,
+  Edit2,
 } from 'lucide-react';
 import { downloadBudgetPdf, sendBudgetWhatsApp } from '../../utils/pdfGenerator';
 
@@ -25,6 +26,7 @@ interface BudgetsListProps {
   onNewBudget: () => void;
   onViewBudget: (budget: Budget) => void;
   onConvertToWorkOrder: (budget: Budget) => void;
+  onEditBudget?: (budget: Budget) => void;
 }
 
 export const BudgetsList: React.FC<BudgetsListProps> = ({
@@ -32,6 +34,7 @@ export const BudgetsList: React.FC<BudgetsListProps> = ({
   onNewBudget,
   onViewBudget,
   onConvertToWorkOrder,
+  onEditBudget,
 }) => {
   const { currentBranch } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,15 +51,15 @@ export const BudgetsList: React.FC<BudgetsListProps> = ({
 
   const filteredBudgets = useMemo(() => {
     return budgets.filter((b) => {
-      if (currentBranch !== 'todas' && b.branchId !== currentBranch) {
-        return false;
-      }
       if (searchTerm.trim()) {
         const query = searchTerm.toLowerCase();
         const num = (b.budgetNumber || '').toLowerCase();
         const client = (b.clientName || '').toLowerCase();
         const plate = (b.licensePlate || '').toLowerCase();
         return num.includes(query) || client.includes(query) || plate.includes(query);
+      }
+      if (currentBranch !== 'todas' && b.branchId && b.branchId !== currentBranch) {
+        return false;
       }
       return true;
     });
@@ -170,6 +173,17 @@ export const BudgetsList: React.FC<BudgetsListProps> = ({
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onEditBudget) onEditBudget(budget);
+                          }}
+                          className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Modificar presupuesto (corregir o agregar trabajos/repuestos)"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Editar</span>
+                        </button>
+                        <button
                           onClick={(e) => handleDirectWhatsApp(e, budget)}
                           className="px-2 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
                           title="Descargar PDF y abrir chat de WhatsApp con el cliente"
@@ -244,7 +258,18 @@ export const BudgetsList: React.FC<BudgetsListProps> = ({
 
                 <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
                   <span>{formatDate(budget.createdAt)}</span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onEditBudget) onEditBudget(budget);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                      title="Editar Presupuesto"
+                    >
+                      <Edit2 className="w-3 h-3 text-amber-400" />
+                      <span>Editar</span>
+                    </button>
                     <button
                       onClick={(e) => handleDirectWhatsApp(e, budget)}
                       className="px-2 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 cursor-pointer"

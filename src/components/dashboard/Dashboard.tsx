@@ -7,6 +7,7 @@ import {
   Reminder,
   BranchId,
   Invoice,
+  Product,
 } from '../../types';
 import { formatCurrency, formatDate, buildWhatsAppLink } from '../../utils/formatters';
 import {
@@ -31,19 +32,23 @@ import {
   CalendarDays,
   AlertTriangle,
   FileText,
+  Printer,
 } from 'lucide-react';
 import { TabId } from '../layout/Sidebar';
+import { OilDrumsMonitor } from './OilDrumsMonitor';
 
 interface DashboardProps {
   workOrders: WorkOrder[];
   sales: Sale[];
   expenses: Expense[];
   reminders: Reminder[];
+  products?: Product[];
   invoices?: Invoice[];
   onNavigate: (tab: TabId) => void;
   onOpenNewWorkOrder: (type: 'aceite_filtro' | 'mecanica_integral') => void;
   onOpenNewSale: () => void;
   onOpenNewExpense: () => void;
+  onOpenOrder?: (order: WorkOrder) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -51,11 +56,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   sales,
   expenses,
   reminders,
+  products = [],
   invoices = [],
   onNavigate,
   onOpenNewWorkOrder,
   onOpenNewSale,
   onOpenNewExpense,
+  onOpenOrder,
 }) => {
   const { currentBranch, isAdmin, canAccessSupplierModules, setCurrentBranch } = useAuth();
 
@@ -213,6 +220,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       </div>
+
+
 
       {/* Financial Day Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
@@ -619,8 +628,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Recordatorios de Services (1/3) */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl flex flex-col justify-between">
+        {/* Right Column: Insumos Críticos & Tambores + Recordatorios de Services (1/3) */}
+        <div className="space-y-6 flex flex-col">
+          <OilDrumsMonitor
+            products={products}
+            onNavigateToInvoices={() => onNavigate('invoices')}
+            onNavigateToSuppliers={() => onNavigate('suppliers')}
+            canAccessSupplierModules={canAccessSupplierModules}
+          />
+
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2.5">
@@ -693,6 +710,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </div>
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>

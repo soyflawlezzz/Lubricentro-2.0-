@@ -152,7 +152,7 @@ export const DeliveryNoteModal: React.FC<DeliveryNoteModalProps> = ({
           <div className="flex flex-col sm:flex-row justify-between items-start pb-6 border-b-2 border-slate-900 gap-4">
             <div className="flex items-center gap-4">
               <img
-                src={settings?.logoUrl || '/lubricentro-logo.svg'}
+                src={settings?.logoUrl || '/lubricentro-original-logo.png'}
                 alt={settings?.companyName || 'Lubricentro 2.0'}
                 className="h-14 sm:h-16 w-auto max-w-[210px] object-contain drop-shadow-sm select-none"
               />

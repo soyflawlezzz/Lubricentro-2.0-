@@ -26,11 +26,31 @@ export const INITIAL_SERVICES: ServiceItemDef[] = [
 
 export const INITIAL_PRODUCTS: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [];
 
+export const DEFAULT_BUDGET_FORMAT = {
+  headerTitle: 'PRESUPUESTO DE SERVICIO',
+  headerSubtitle: 'Lubricentro & Mecánica Automotor',
+  headerCustomText: 'Atención especializada • Trabajos garantizados',
+  headerLogoPosition: 'left' as const,
+  showBranchAddresses: true,
+  accentColor: '#DC2626',
+  templateStyle: 'modern_card' as const,
+  validityDaysText: 'Presupuesto válido por 10 días a partir de la fecha de emisión.',
+  footerNotes: 'Precios sujetos a variación según disponibilidad de repuestos e insumos al momento de ejecutar el trabajo.',
+  customTerms: 'Trabajos de mano de obra y repuestos garantizados según especificaciones técnicas de fábrica.',
+  showSignatureBlock: true,
+  showItemCode: true,
+  showItemCategory: true,
+  showUnitPrices: true,
+  showVehicleKm: true,
+};
+
 export const DEFAULT_SETTINGS: CompanySettings = {
   companyName: 'LUBRICENTRO 2.0',
-  logoUrl: '/lubricentro-logo.svg',
-  phone: '011 5555-4321',
-  whatsapp: '5491155554321',
+  logoUrl: '/lubricentro-official-logo.png',
+  phone: '1164884571',
+  whatsapp: '5491164884571',
+  whatsappEscobar: '5491164884571',
+  whatsappMaschwitz: '5491164884571',
   addressEscobar: 'Estrada 1355, Belén de Escobar',
   addressMaschwitz: 'Colectora Oeste 1439, Ing. Maschwitz',
   email: 'contacto@lubricentro20.com',
@@ -39,102 +59,12 @@ export const DEFAULT_SETTINGS: CompanySettings = {
   whatsappBudgetTemplate: '¡Hola {cliente}! Te acercamos el presupuesto de Lubricentro 2.0 para tu vehículo {vehiculo} (Patente: {patente}) por un total de ${total}. ¿Querés que reservemos tu turno para realizar el trabajo?',
   whatsappReminderTemplate: '¡Hola {cliente}! Te recordamos desde Lubricentro 2.0 que próximamente corresponde realizar el service de tu {vehiculo} (Patente: {patente}). Podés comunicarte con nosotros para coordinar tu turno en Escobar o Maschwitz.',
   servicesCatalog: INITIAL_SERVICES,
-  paymentMethods: ['Efectivo', 'Transferencia Bancaria', 'Débito', 'Crédito', 'Mercado Pago', 'Cuenta Corriente', 'Otro']
+  paymentMethods: ['Efectivo', 'Transferencia Bancaria', 'Débito', 'Crédito', 'Mercado Pago', 'Cuenta Corriente', 'Otro'],
+  budgetFormat: DEFAULT_BUDGET_FORMAT,
 };
 
-export const INITIAL_SUPPLIERS = [
-  {
-    name: 'Distribuidora Shell & Castrol Argentina',
-    cuit: '30-68192834-4',
-    phone: '011 4765-8899',
-    whatsapp: '5491147658899',
-    email: 'pedidos@shellcastrol.com.ar',
-    address: 'Av. Juan B. Justo 4320, CABA',
-    contactPerson: 'Martín Rodríguez',
-    observations: 'Proveedor principal de aceites sintéticos y tambores de 205L.',
-    status: 'activo' as const,
-  },
-  {
-    name: 'Filtros Mann & Hummel SRL',
-    cuit: '30-55443322-1',
-    phone: '011 4890-2211',
-    whatsapp: '5491148902211',
-    email: 'ventas@mann-filter.com.ar',
-    address: 'Panamericana Km 38.5, Garín',
-    contactPerson: 'Valeria Gómez',
-    observations: 'Descuento 10% por pago a 15 días.',
-    status: 'activo' as const,
-  },
-  {
-    name: 'Repuestos Warnes Automotor SA',
-    cuit: '30-71092834-9',
-    phone: '011 4855-3344',
-    whatsapp: '5491148553344',
-    email: 'comercial@warnesrepuestos.com',
-    address: 'Av. Warnes 1250, CABA',
-    contactPerson: 'Carlos Benítez',
-    observations: 'Pastillas de freno, tren delantero y amortiguadores.',
-    status: 'activo' as const,
-  },
-];
+export const INITIAL_SUPPLIERS = [];
 
-export const INITIAL_INVOICES = [
-  {
-    supplierName: 'Distribuidora Shell & Castrol Argentina',
-    cuit: '30-68192834-4',
-    invoiceNumber: '0001-00012345',
-    voucherType: 'Factura A' as const,
-    issueDate: '2026-09-25',
-    dueDate: '2026-10-10',
-    concept: 'Tambores 205L Helix Ultra 5W40 y cajas x12 1L',
-    amount: 150000,
-    paymentMethod: 'Transferencia Bancaria',
-    status: 'pendiente' as const,
-    branchId: 'ambas',
-    observations: 'Factura próxima a vencer en 3 días.',
-  },
-  {
-    supplierName: 'Filtros Mann & Hummel SRL',
-    cuit: '30-55443322-1',
-    invoiceNumber: '0003-00004567',
-    voucherType: 'Factura A' as const,
-    issueDate: '2026-09-28',
-    dueDate: '2026-10-12',
-    concept: 'Lote 50 filtros de aceite W712 y 30 filtros de aire C2500',
-    amount: 85000,
-    paymentMethod: 'Cheque',
-    status: 'pendiente' as const,
-    branchId: 'escobar',
-    observations: 'Cheque a 15 días.',
-  },
-  {
-    supplierName: 'Repuestos Warnes Automotor SA',
-    cuit: '30-71092834-9',
-    invoiceNumber: '0002-00088921',
-    voucherType: 'Factura A' as const,
-    issueDate: '2026-09-15',
-    dueDate: '2026-10-05',
-    concept: 'Juegos de pastillas Fras-le y discos de freno ventilados',
-    amount: 62500,
-    paymentMethod: 'Transferencia Bancaria',
-    status: 'vencida' as const,
-    branchId: 'maschwitz',
-    observations: 'Comprobante vencido pendiente de pago.',
-  },
-  {
-    supplierName: 'Distribuidora Shell & Castrol Argentina',
-    cuit: '30-68192834-4',
-    invoiceNumber: '0001-00011980',
-    voucherType: 'Factura A' as const,
-    issueDate: '2026-09-10',
-    dueDate: '2026-10-01',
-    concept: 'Compra de fluidos de freno Wagner y refrigerantes',
-    amount: 110000,
-    paymentMethod: 'Transferencia Bancaria',
-    status: 'pagada' as const,
-    paymentDate: '2026-09-30',
-    branchId: 'ambas',
-    observations: 'Cancelada en término.',
-  },
-];
+export const INITIAL_INVOICES = [];
+
 
