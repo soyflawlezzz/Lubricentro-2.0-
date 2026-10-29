@@ -298,62 +298,59 @@ const MainAppContent: React.FC = () => {
     try {
       const orderId = await createWorkOrder(orderData);
 
-      // Check if client exists, otherwise create
-      let matchedClient = clients.find(
-        (c) => c.fullName.trim().toLowerCase() === orderData.clientName.trim().toLowerCase()
-      );
-      if (!matchedClient) {
-        const newClientId = await createClient({
-          fullName: orderData.clientName,
-          phone: orderData.clientPhone,
-          whatsapp: orderData.clientWhatsapp,
-          branchId: orderData.branchId,
-          active: true,
-        });
-        matchedClient = {
-          id: newClientId,
-          fullName: orderData.clientName,
-          phone: orderData.clientPhone,
-          whatsapp: orderData.clientWhatsapp,
-          branchId: orderData.branchId,
-          active: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-      }
+      // Launch auxiliary Client, Vehicle, and Budget tasks in background without blocking modal close
+      (async () => {
+        try {
+          let matchedClient = clients.find(
+            (c) => c.fullName.trim().toLowerCase() === orderData.clientName.trim().toLowerCase()
+          );
+          let targetClientId = matchedClient?.id;
 
-      // Check if vehicle exists, otherwise create
-      const matchedVehicle = vehicles.find(
-        (v) => v.licensePlate.trim().toUpperCase() === orderData.licensePlate.trim().toUpperCase()
-      );
-      if (!matchedVehicle) {
-        await createVehicle({
-          licensePlate: orderData.licensePlate,
-          brand: orderData.vehicleBrand,
-          model: orderData.vehicleModel,
-          year: orderData.vehicleYear,
-          currentKm: orderData.currentKm,
-          lastServiceKm: orderData.lastServiceKm,
-          clientId: matchedClient.id,
-          clientName: orderData.clientName,
-          branchId: orderData.branchId,
-          active: true,
-        });
-      }
-
-      // If converted from budget, link budget
-      if (orderData.notes && orderData.notes.includes('Convertido de Presupuesto #')) {
-        const match = orderData.notes.match(/Presupuesto #([A-Z0-9-]+)/);
-        if (match && match[1]) {
-          const bMatch = budgets.find((b) => b.budgetNumber === match[1]);
-          if (bMatch) {
-            await updateBudget(bMatch.id, {
-              status: 'convertido_ot',
-              convertedWorkOrderId: orderId,
+          if (!matchedClient) {
+            targetClientId = await createClient({
+              fullName: orderData.clientName,
+              phone: orderData.clientPhone,
+              whatsapp: orderData.clientWhatsapp,
+              branchId: orderData.branchId,
+              active: true,
             });
           }
+
+          const matchedVehicle = vehicles.find(
+            (v) => v.licensePlate.trim().toUpperCase() === orderData.licensePlate.trim().toUpperCase()
+          );
+
+          if (!matchedVehicle && targetClientId) {
+            await createVehicle({
+              licensePlate: orderData.licensePlate,
+              brand: orderData.vehicleBrand,
+              model: orderData.vehicleModel,
+              year: orderData.vehicleYear,
+              currentKm: orderData.currentKm,
+              lastServiceKm: orderData.lastServiceKm,
+              clientId: targetClientId,
+              clientName: orderData.clientName,
+              branchId: orderData.branchId,
+              active: true,
+            });
+          }
+
+          if (orderData.notes && orderData.notes.includes('Convertido de Presupuesto #')) {
+            const match = orderData.notes.match(/Presupuesto #([A-Z0-9-]+)/);
+            if (match && match[1]) {
+              const bMatch = budgets.find((b) => b.budgetNumber === match[1]);
+              if (bMatch) {
+                await updateBudget(bMatch.id, {
+                  status: 'convertido_ot',
+                  convertedWorkOrderId: orderId,
+                });
+              }
+            }
+          }
+        } catch (auxErr) {
+          console.warn('Background work order auxiliary sync warning:', auxErr);
         }
-      }
+      })();
 
       showToast(`Orden #${orderData.orderNumber} creada con éxito`, 'success');
       setWorkOrderPresetData(undefined);
@@ -583,37 +580,41 @@ const MainAppContent: React.FC = () => {
                 onSaveClient={async (clientData, vehiclesData) => {
                   const clientId = await createClient(clientData);
                   if (vehiclesData && vehiclesData.length > 0) {
-                    for (const veh of vehiclesData) {
-                      await createVehicle({
-                        ...veh,
-                        clientId,
-                        clientName: clientData.fullName,
-                      });
-                    }
+                    await Promise.all(
+                      vehiclesData.map((veh) =>
+                        createVehicle({
+                          ...veh,
+                          clientId,
+                          clientName: clientData.fullName,
+                        })
+                      )
+                    );
                   }
                   showToast('Cliente y vehículos guardados correctamente', 'success');
                 }}
                 onUpdateClient={async (id, clientData, vehiclesData) => {
                   await updateClient(id, clientData);
                   if (vehiclesData && vehiclesData.length > 0) {
-                    for (const veh of vehiclesData) {
-                      const existing = vehicles.find(
-                        (v) => (v.licensePlate || '').trim().toUpperCase() === veh.licensePlate.trim().toUpperCase()
-                      );
-                      if (existing) {
-                        await updateVehicle(existing.id, {
-                          ...veh,
-                          clientId: id,
-                          clientName: clientData.fullName || existing.clientName,
-                        });
-                      } else {
-                        await createVehicle({
-                          ...veh,
-                          clientId: id,
-                          clientName: clientData.fullName || '',
-                        });
-                      }
-                    }
+                    await Promise.all(
+                      vehiclesData.map((veh) => {
+                        const existing = vehicles.find(
+                          (v) => (v.licensePlate || '').trim().toUpperCase() === veh.licensePlate.trim().toUpperCase()
+                        );
+                        if (existing) {
+                          return updateVehicle(existing.id, {
+                            ...veh,
+                            clientId: id,
+                            clientName: clientData.fullName || existing.clientName,
+                          });
+                        } else {
+                          return createVehicle({
+                            ...veh,
+                            clientId: id,
+                            clientName: clientData.fullName || '',
+                          });
+                        }
+                      })
+                    );
                   }
                   showToast('Cliente actualizado correctamente', 'success');
                 }}

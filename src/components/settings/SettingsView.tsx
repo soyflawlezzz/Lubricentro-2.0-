@@ -141,8 +141,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setWhatsapp(settings.whatsapp || '');
       setAddressEscobar(settings.addressEscobar || '');
       setAddressMaschwitz(settings.addressMaschwitz || '');
-      setEmail(settings.email || '');
-      setCommercialInfo(settings.commercialInfo || '');
+      setEmail(settings.email === 'contacto@lubricentro20.com' ? '' : (settings.email || ''));
+      setCommercialInfo(settings.commercialInfo && settings.commercialInfo.includes('30-71829340-8') ? '' : (settings.commercialInfo || ''));
 
       setGoogleDrivePriceListUrl(settings.googleDrivePriceListUrl || '');
       setDefaultPriceMarginPercent(settings.defaultPriceMarginPercent ?? 40);

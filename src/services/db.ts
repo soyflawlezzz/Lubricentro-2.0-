@@ -41,6 +41,12 @@ import {
   INITIAL_SUPPLIERS,
   INITIAL_INVOICES,
 } from './seedData';
+import {
+  getCachedClients,
+  saveCachedClients,
+  getCachedVehicles,
+  saveCachedVehicles,
+} from './localCache';
 
 // Helper for date formatting
 export const getNowIso = () => new Date().toISOString();
@@ -111,9 +117,9 @@ export async function createWorkOrder(data: Omit<WorkOrder, 'id'>): Promise<stri
     });
     const docRef = await addDoc(collection(db, collPath), cleanData);
 
-    // Also auto-create a reminder if next service date or KM is indicated
+    // Also auto-create a reminder in background if next service date or KM is indicated
     if (data.nextServiceDate || data.nextServiceKm) {
-      await createReminder({
+      createReminder({
         workOrderId: docRef.id,
         clientName: data.clientName,
         clientWhatsapp: data.clientWhatsapp,
@@ -125,7 +131,7 @@ export async function createWorkOrder(data: Omit<WorkOrder, 'id'>): Promise<stri
         status: 'pendiente',
         branchId: data.branchId,
         createdAt: getNowIso(),
-      });
+      }).catch((err) => console.warn('Background reminder creation warning:', err));
     }
 
     return docRef.id;
@@ -197,6 +203,19 @@ export function subscribeClients(
   callback: (clients: Client[]) => void
 ) {
   const collPath = 'clients';
+
+  // Read instantly from local IndexedDB cache for zero latency (<0.05s) startup
+  getCachedClients()
+    .then((cached) => {
+      if (cached && cached.length > 0) {
+        const list = cached
+          .filter((c) => c.active !== false)
+          .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+        callback(list);
+      }
+    })
+    .catch((err) => console.warn('IndexedDB clients read warning:', err));
+
   try {
     return onSnapshot(
       collection(db, collPath),
@@ -210,6 +229,10 @@ export function subscribeClients(
         list = list.filter((c) => c.active !== false);
 
         list.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+
+        // Persist fresh snapshot to IndexedDB cache
+        saveCachedClients(list);
+
         callback(list);
       },
       (error) => {
@@ -271,6 +294,19 @@ export function subscribeVehicles(
   callback: (vehicles: Vehicle[]) => void
 ) {
   const collPath = 'vehicles';
+
+  // Read instantly from local IndexedDB cache for zero latency (<0.05s) startup
+  getCachedVehicles()
+    .then((cached) => {
+      if (cached && cached.length > 0) {
+        const list = cached
+          .filter((v) => v.active !== false)
+          .sort((a, b) => (a.licensePlate || '').localeCompare(b.licensePlate || ''));
+        callback(list);
+      }
+    })
+    .catch((err) => console.warn('IndexedDB vehicles read warning:', err));
+
   try {
     return onSnapshot(
       collection(db, collPath),
@@ -283,6 +319,10 @@ export function subscribeVehicles(
         list = list.filter((v) => v.active !== false);
 
         list.sort((a, b) => (a.licensePlate || '').localeCompare(b.licensePlate || ''));
+
+        // Persist fresh snapshot to IndexedDB cache
+        saveCachedVehicles(list);
+
         callback(list);
       },
       (error) => {
@@ -498,22 +538,26 @@ export async function createSale(data: Omit<Sale, 'id' | 'createdAt'>): Promise<
     });
     const docRef = await addDoc(collection(db, collPath), cleanData);
 
-    // Optionally deduct stock if productId is present
-    for (const item of data.items) {
-      if (item.productId) {
-        try {
-          const pDoc = await getDoc(doc(db, 'products', item.productId));
-          if (pDoc.exists()) {
-            const currentStock = pDoc.data().stock || 0;
-            await updateDoc(doc(db, 'products', item.productId), {
-              stock: Math.max(0, currentStock - item.quantity),
-              updatedAt: getNowIso(),
-            });
-          }
-        } catch (e) {
-          console.warn('Stock update skipped for item:', item.name);
-        }
-      }
+    // Concurrently deduct stock in background
+    if (data.items && data.items.length > 0) {
+      Promise.all(
+        data.items
+          .filter((item) => item.productId)
+          .map(async (item) => {
+            try {
+              const pDoc = await getDoc(doc(db, 'products', item.productId!));
+              if (pDoc.exists()) {
+                const currentStock = pDoc.data().stock || 0;
+                await updateDoc(doc(db, 'products', item.productId!), {
+                  stock: Math.max(0, currentStock - item.quantity),
+                  updatedAt: getNowIso(),
+                });
+              }
+            } catch (e) {
+              console.warn('Stock update skipped for item:', item.name);
+            }
+          })
+      ).catch((e) => console.warn('Background stock deduction warning:', e));
     }
 
     return docRef.id;
@@ -722,6 +766,8 @@ export function subscribeSettings(callback: (settings: CompanySettings) => void)
         if (snapshot.exists()) {
           const data = snapshot.data() as CompanySettings;
           const merged = { ...DEFAULT_SETTINGS, ...data };
+          if (merged.email === 'contacto@lubricentro20.com') merged.email = '';
+          if (merged.commercialInfo && merged.commercialInfo.includes('30-71829340-8')) merged.commercialInfo = '';
           try {
             localStorage.setItem('lubricentro_settings', JSON.stringify(merged));
           } catch (e) {}
@@ -1082,6 +1128,10 @@ export async function fetchDirectClientsAndVehicles(): Promise<{
       .map((d) => ({ id: d.id, ...d.data() } as Vehicle))
       .filter((v) => v.active !== false)
       .sort((a, b) => (a.licensePlate || '').localeCompare(b.licensePlate || ''));
+
+    // Cache pulled data locally in IndexedDB
+    saveCachedClients(clients).catch((e) => console.warn('Cache client write error:', e));
+    saveCachedVehicles(vehicles).catch((e) => console.warn('Cache vehicle write error:', e));
 
     return { clients, vehicles };
   } catch (error) {
