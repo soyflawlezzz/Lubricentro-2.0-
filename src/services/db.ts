@@ -46,6 +46,8 @@ import {
   saveCachedClients,
   getCachedVehicles,
   saveCachedVehicles,
+  getCachedWorkOrders,
+  saveCachedWorkOrders,
 } from './localCache';
 
 // Helper for date formatting
@@ -83,6 +85,17 @@ export function subscribeWorkOrders(
   onError?: (err: any) => void
 ) {
   const collPath = 'workOrders';
+
+  // Serve instantly from IndexedDB cache for zero latency startup
+  getCachedWorkOrders()
+    .then((cached) => {
+      if (cached && cached.length > 0) {
+        cached.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        callback(cached);
+      }
+    })
+    .catch((err) => console.warn('IndexedDB work orders read warning:', err));
+
   try {
     const q = collection(db, collPath);
     return onSnapshot(
@@ -95,6 +108,10 @@ export function subscribeWorkOrders(
 
         // Sort by createdAt desc
         list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+        // Save fresh snapshot to IndexedDB cache
+        saveCachedWorkOrders(list);
+
         callback(list);
       },
       (error) => {
@@ -956,15 +973,6 @@ export async function deleteInvoice(invoiceId: string) {
 // Initialize seed data if database is empty
 export async function seedInitialDatabaseIfEmpty() {
   try {
-    // Automatically clear products catalog
-    const prodSnap = await getDocs(collection(db, 'products'));
-    if (!prodSnap.empty) {
-      console.log('Clearing existing products catalog...');
-      for (const d of prodSnap.docs) {
-        await deleteDoc(d.ref);
-      }
-    }
-
     // Check settings
     const setSnap = await getDoc(doc(db, 'settings', 'general'));
     if (!setSnap.exists()) {

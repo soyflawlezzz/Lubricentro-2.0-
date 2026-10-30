@@ -34,11 +34,15 @@ import {
   Zap,
   Server,
   Clock,
+  Bell,
+  Send,
+  CheckCircle2,
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { DEFAULT_BUDGET_FORMAT } from '../../services/seedData';
+import { sendAdminNotification, buildAdminNotificationMessage } from '../../services/adminNotification';
 
 interface SettingsViewProps {
   settings?: CompanySettings;
@@ -67,9 +71,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   lastSyncTime,
   onManualPullData,
 }) => {
-  const { isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<
-    'empresa' | 'servicios' | 'whatsapp' | 'pagos' | 'precios' | 'diseno_presupuestos' | 'sistema'
+    'empresa' | 'servicios' | 'whatsapp' | 'pagos' | 'precios' | 'diseno_presupuestos' | 'notificaciones' | 'sistema'
   >('empresa');
   const [isClearing, setIsClearing] = useState(false);
   const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false);
@@ -90,6 +93,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [addressMaschwitz, setAddressMaschwitz] = useState('');
   const [email, setEmail] = useState('');
   const [commercialInfo, setCommercialInfo] = useState('');
+
+  // Admin Notification States
+  const [adminWhatsappNumber, setAdminWhatsappNumber] = useState('');
+  const [adminWebhookUrl, setAdminWebhookUrl] = useState('');
+  const [notifyAdminOnOT, setNotifyAdminOnOT] = useState(true);
+  const [notifyAdminOnClient, setNotifyAdminOnClient] = useState(true);
+  const [notifyAdminOnSale, setNotifyAdminOnSale] = useState(true);
+  const [testNotificationSent, setTestNotificationSent] = useState(false);
 
   // Google Drive Price List Sync
   const [googleDrivePriceListUrl, setGoogleDrivePriceListUrl] = useState('');
@@ -171,7 +182,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setShowItemCode(bf.showItemCode ?? true);
       setShowItemCategory(bf.showItemCategory ?? true);
       setShowUnitPrices(bf.showUnitPrices ?? true);
-      setShowVehicleKm(bf.showVehicleKm ?? true);
+      setAdminWhatsappNumber(settings.adminWhatsappNumber || '5491164884571');
+      setAdminWebhookUrl(settings.adminWebhookUrl || '');
+      setNotifyAdminOnOT(settings.notifyAdminOnOT ?? true);
+      setNotifyAdminOnClient(settings.notifyAdminOnClient ?? true);
+      setNotifyAdminOnSale(settings.notifyAdminOnSale ?? true);
 
       setIsInitialized(true);
     }
@@ -291,6 +306,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           showUnitPrices,
           showVehicleKm,
         },
+        adminWhatsappNumber: adminWhatsappNumber.trim(),
+        adminWebhookUrl: adminWebhookUrl.trim(),
+        notifyAdminOnOT,
+        notifyAdminOnClient,
+        notifyAdminOnSale,
       });
 
       setSavedSuccess(true);
@@ -301,6 +321,43 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleTestNotification = async () => {
+    const samplePayload = {
+      type: 'new_ot' as const,
+      workOrder: {
+        orderNumber: 'OT-DEMO123',
+        clientName: 'Juan Pérez (Prueba)',
+        clientPhone: '1164884571',
+        clientWhatsapp: '5491164884571',
+        vehicleBrand: 'Volkswagen',
+        vehicleModel: 'Amarok 2.0 TDI',
+        licensePlate: 'AF123JK',
+        currentKm: 65400,
+        servicesSelected: ['Cambio de Aceite', 'Filtro de Aceite MANNOL 5W30'],
+        total: 68500,
+        branchId: 'escobar',
+      },
+      userName: 'Taller Central',
+      settings: {
+        ...settings,
+        adminWhatsappNumber,
+        adminWebhookUrl,
+        notifyAdminOnOT,
+        notifyAdminOnClient,
+        notifyAdminOnSale,
+      } as any,
+    };
+
+    await sendAdminNotification(samplePayload);
+    setTestNotificationSent(true);
+    setTimeout(() => setTestNotificationSent(false), 4000);
+
+    const { fullMessage } = buildAdminNotificationMessage(samplePayload);
+    const cleanNum = (adminWhatsappNumber || '5491164884571').replace(/\D/g, '');
+    const waUrl = `https://wa.me/${cleanNum}?text=${encodeURIComponent(fullMessage)}`;
+    window.open(waUrl, '_blank');
   };
 
   const handleAddService = () => {
@@ -443,6 +500,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         >
           <Palette className="w-3.5 h-3.5 text-amber-400" />
           <span>Diseño de Presupuestos</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('notificaciones')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+            activeTab === 'notificaciones'
+              ? 'bg-slate-800 text-emerald-400 border border-emerald-500/30 shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Bell className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Notificaciones & Control</span>
         </button>
         <button
           type="button"
@@ -696,6 +764,135 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tab: Notificaciones de Administración */}
+        {activeTab === 'notificaciones' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-emerald-400" />
+                  <span>Notificaciones Automáticas para Control de Gestión</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Envío automático en segundo plano por WhatsApp / Webhook al registrar OTs, nuevos clientes o ventas en el taller.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleTestNotification}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer self-start sm:self-auto"
+              >
+                {testNotificationSent ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-white" />
+                    <span>¡Notificación Enviada / Probada!</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>Probar Notificación de Ejemplo</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
+                  Número de WhatsApp de Administración / Control *
+                </label>
+                <input
+                  type="text"
+                  value={adminWhatsappNumber}
+                  onChange={(e) => setAdminWhatsappNumber(e.target.value)}
+                  placeholder="Ej: 5491164884571"
+                  className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs sm:text-sm text-white font-mono focus:outline-hidden focus:border-emerald-500"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Número de administración que recibirá el resumen con cliente, vehículo, productos y monto.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
+                  URL de Webhook / Pasarela de Mensajería (Opcional)
+                </label>
+                <input
+                  type="url"
+                  value={adminWebhookUrl}
+                  onChange={(e) => setAdminWebhookUrl(e.target.value)}
+                  placeholder="https://api.gateway.com/send-message / Webhook de integración"
+                  className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs sm:text-sm text-white font-mono focus:outline-hidden focus:border-emerald-500"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Dirección HTTP POST JSON ejecutada en segundo plano sin ralentizar el taller.
+                </p>
+              </div>
+            </div>
+
+            {/* Event Toggles */}
+            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                Eventos a Notificar Automáticamente
+              </h4>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800/80 hover:border-slate-700 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={notifyAdminOnOT}
+                    onChange={(e) => setNotifyAdminOnOT(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 bg-slate-950 border-slate-700"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-white block">
+                      📋 Notificar Nuevas Órdenes de Trabajo (OT)
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Incluye tipo de trabajo, cliente, vehículo/patente, productos/aceites (MANNOL, Motul, etc.), total y usuario.
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800/80 hover:border-slate-700 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={notifyAdminOnClient}
+                    onChange={(e) => setNotifyAdminOnClient(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 bg-slate-950 border-slate-700"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-white block">
+                      👤 Notificar Alta de Nuevos Clientes
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Notifica nombre del cliente, teléfono/WhatsApp, DNI/CUIT, sucursal y usuario que lo dio de alta.
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800/80 hover:border-slate-700 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={notifyAdminOnSale}
+                    onChange={(e) => setNotifyAdminOnSale(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 bg-slate-950 border-slate-700"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-white block">
+                      🛒 Notificar Ventas de Mostrador / Insumos
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Informa número de comprobante, detalle de productos, medio de pago, monto total y sucursal.
+                    </span>
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
         )}

@@ -61,6 +61,11 @@ export const DEFAULT_SETTINGS: CompanySettings = {
   servicesCatalog: INITIAL_SERVICES,
   paymentMethods: ['Efectivo', 'Transferencia Bancaria', 'Débito', 'Crédito', 'Mercado Pago', 'Cuenta Corriente', 'Otro'],
   budgetFormat: DEFAULT_BUDGET_FORMAT,
+  adminWhatsappNumber: '5491164884571',
+  adminWebhookUrl: '',
+  notifyAdminOnOT: true,
+  notifyAdminOnClient: true,
+  notifyAdminOnSale: true,
 };
 
 export const INITIAL_SUPPLIERS = [];

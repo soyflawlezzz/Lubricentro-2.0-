@@ -45,8 +45,29 @@ export const WorkOrdersList: React.FC<WorkOrdersListProps> = ({
 
   const filteredOrders = useMemo(() => {
     return workOrders.filter((order) => {
-      // Branch filter if not 'todas'
-      if (currentBranch !== 'todas' && order.branchId !== currentBranch) {
+      // If user typed a search term, search across ALL branches so no OT is ever hidden
+      const query = searchTerm.toLowerCase().trim();
+      if (query) {
+        const plate = (order.licensePlate || '').toLowerCase();
+        const client = (order.clientName || '').toLowerCase();
+        const number = (order.orderNumber || '').toLowerCase();
+        const vehicle = `${order.vehicleBrand} ${order.vehicleModel}`.toLowerCase();
+        const matchesQuery =
+          plate.includes(query) ||
+          client.includes(query) ||
+          number.includes(query) ||
+          vehicle.includes(query);
+
+        if (!matchesQuery) return false;
+
+        if (statusFilter !== 'todos' && order.status !== statusFilter) return false;
+        if (typeFilter !== 'todos' && order.type !== typeFilter) return false;
+
+        return true;
+      }
+
+      // Branch filter if not 'todas' when browsing without search
+      if (currentBranch !== 'todas' && order.branchId && order.branchId !== currentBranch) {
         return false;
       }
 
@@ -58,21 +79,6 @@ export const WorkOrdersList: React.FC<WorkOrdersListProps> = ({
       // Type filter
       if (typeFilter !== 'todos' && order.type !== typeFilter) {
         return false;
-      }
-
-      // Search term
-      if (searchTerm.trim()) {
-        const query = searchTerm.toLowerCase().trim();
-        const plate = (order.licensePlate || '').toLowerCase();
-        const client = (order.clientName || '').toLowerCase();
-        const number = (order.orderNumber || '').toLowerCase();
-        const vehicle = `${order.vehicleBrand} ${order.vehicleModel}`.toLowerCase();
-        return (
-          plate.includes(query) ||
-          client.includes(query) ||
-          number.includes(query) ||
-          vehicle.includes(query)
-        );
       }
 
       return true;

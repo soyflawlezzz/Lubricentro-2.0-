@@ -381,6 +381,11 @@ export interface CompanySettings {
   defaultPriceMarginPercent?: number;
   lastPriceListSyncDate?: string;
   budgetFormat?: BudgetFormatSettings;
+  adminWhatsappNumber?: string;
+  adminWebhookUrl?: string;
+  notifyAdminOnOT?: boolean;
+  notifyAdminOnClient?: boolean;
+  notifyAdminOnSale?: boolean;
 }
 
 export interface Supplier {

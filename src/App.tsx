@@ -27,6 +27,7 @@ import { InvoicesCalendar } from './components/invoices/InvoicesCalendar';
 import { AppointmentsCalendar } from './components/appointments/AppointmentsCalendar';
 import { AppointmentFormModal } from './components/appointments/AppointmentFormModal';
 import { GlobalSearchModal } from './components/common/GlobalSearchModal';
+import { sendAdminNotification } from './services/adminNotification';
 import {
   WorkOrder,
   WorkOrderType,
@@ -293,48 +294,122 @@ const MainAppContent: React.FC = () => {
     };
   }, [user, currentBranch, canAccessSupplierModules]);
 
-  // Handle Work Order Creation (also creates/updates Vehicle and Client if new)
+  // Handle Work Order Creation (automatically creates/updates Vehicle and Client permanently in DB)
   const handleSaveWorkOrder = async (orderData: Omit<WorkOrder, 'id'>) => {
     try {
       const orderId = await createWorkOrder(orderData);
 
-      // Launch auxiliary Client, Vehicle, and Budget tasks in background without blocking modal close
+      // Trigger asynchronous Admin WhatsApp Notification
+      sendAdminNotification({
+        type: 'new_ot',
+        workOrder: { ...orderData, id: orderId },
+        userName: profile?.displayName || user?.displayName || 'Usuario',
+        settings,
+      });
+
+      // Launch background auxiliary Client, Vehicle, and Budget tasks to ensure full persistence without blocking modal response
       (async () => {
         try {
-          let matchedClient = clients.find(
-            (c) => c.fullName.trim().toLowerCase() === orderData.clientName.trim().toLowerCase()
-          );
-          let targetClientId = matchedClient?.id;
+          // 1. CLIENT SYNCHRONIZATION
+          let matchedClient = orderData.clientId
+            ? clients.find((c) => c.id === orderData.clientId)
+            : undefined;
 
           if (!matchedClient) {
+            const cleanName = orderData.clientName.trim().toLowerCase();
+            matchedClient = clients.find(
+              (c) => c.fullName.trim().toLowerCase() === cleanName
+            );
+          }
+
+          if (!matchedClient && (orderData.clientPhone || orderData.clientWhatsapp)) {
+            const cleanPhone = (orderData.clientPhone || '').trim();
+            const cleanWa = (orderData.clientWhatsapp || '').trim();
+            matchedClient = clients.find(
+              (c) =>
+                (cleanPhone && c.phone === cleanPhone) ||
+                (cleanWa && c.whatsapp === cleanWa)
+            );
+          }
+
+          let targetClientId = matchedClient?.id;
+
+          if (matchedClient) {
+            // Update existing client record with latest contact info & active status
+            await updateClient(matchedClient.id, {
+              fullName: orderData.clientName.trim() || matchedClient.fullName,
+              phone: orderData.clientPhone.trim() || matchedClient.phone,
+              whatsapp: orderData.clientWhatsapp.trim() || matchedClient.whatsapp,
+              branchId: orderData.branchId || matchedClient.branchId,
+              active: true,
+            });
+          } else {
+            // Create new client record in CLIENTES collection
             targetClientId = await createClient({
-              fullName: orderData.clientName,
-              phone: orderData.clientPhone,
-              whatsapp: orderData.clientWhatsapp,
+              fullName: orderData.clientName.trim(),
+              phone: orderData.clientPhone.trim(),
+              whatsapp: orderData.clientWhatsapp.trim() || orderData.clientPhone.trim(),
               branchId: orderData.branchId,
               active: true,
             });
           }
 
-          const matchedVehicle = vehicles.find(
-            (v) => v.licensePlate.trim().toUpperCase() === orderData.licensePlate.trim().toUpperCase()
-          );
+          // 2. VEHICLE SYNCHRONIZATION
+          let matchedVehicle = orderData.vehicleId
+            ? vehicles.find((v) => v.id === orderData.vehicleId)
+            : undefined;
 
-          if (!matchedVehicle && targetClientId) {
-            await createVehicle({
-              licensePlate: orderData.licensePlate,
-              brand: orderData.vehicleBrand,
-              model: orderData.vehicleModel,
-              year: orderData.vehicleYear,
-              currentKm: orderData.currentKm,
-              lastServiceKm: orderData.lastServiceKm,
+          if (!matchedVehicle) {
+            const cleanPlate = orderData.licensePlate.trim().toUpperCase();
+            matchedVehicle = vehicles.find(
+              (v) => (v.licensePlate || '').trim().toUpperCase() === cleanPlate
+            );
+          }
+
+          let targetVehicleId = matchedVehicle?.id;
+
+          const newKm = Number(orderData.currentKm) || 0;
+          const newLastServiceKm = Number(orderData.lastServiceKm) || newKm;
+
+          if (matchedVehicle) {
+            // Update existing vehicle in VEHICULOS & HISTORIAL collection with latest KM and service details
+            await updateVehicle(matchedVehicle.id, {
+              licensePlate: orderData.licensePlate.trim().toUpperCase(),
+              brand: orderData.vehicleBrand.trim() || matchedVehicle.brand,
+              model: orderData.vehicleModel.trim() || matchedVehicle.model,
+              year: Number(orderData.vehicleYear) || matchedVehicle.year,
+              currentKm: newKm > 0 ? newKm : matchedVehicle.currentKm,
+              lastServiceKm: newLastServiceKm > 0 ? newLastServiceKm : matchedVehicle.lastServiceKm,
+              clientId: targetClientId || matchedVehicle.clientId,
+              clientName: orderData.clientName.trim() || matchedVehicle.clientName,
+              branchId: orderData.branchId || matchedVehicle.branchId,
+              active: true,
+            });
+          } else if (targetClientId) {
+            // Create new vehicle record in VEHICULOS & HISTORIAL collection
+            targetVehicleId = await createVehicle({
+              licensePlate: orderData.licensePlate.trim().toUpperCase(),
+              brand: orderData.vehicleBrand.trim(),
+              model: orderData.vehicleModel.trim(),
+              year: Number(orderData.vehicleYear) || new Date().getFullYear(),
+              currentKm: newKm,
+              lastServiceKm: newLastServiceKm,
               clientId: targetClientId,
-              clientName: orderData.clientName,
+              clientName: orderData.clientName.trim(),
               branchId: orderData.branchId,
               active: true,
             });
           }
 
+          // 3. LINK GENERATED CLIENT / VEHICLE IDs TO WORK ORDER
+          if (targetClientId || targetVehicleId) {
+            await updateWorkOrder(orderId, {
+              ...(targetClientId ? { clientId: targetClientId } : {}),
+              ...(targetVehicleId ? { vehicleId: targetVehicleId } : {}),
+            });
+          }
+
+          // 4. BUDGET LINK
           if (orderData.notes && orderData.notes.includes('Convertido de Presupuesto #')) {
             const match = orderData.notes.match(/Presupuesto #([A-Z0-9-]+)/);
             if (match && match[1]) {
@@ -591,6 +666,13 @@ const MainAppContent: React.FC = () => {
                     );
                   }
                   showToast('Cliente y vehículos guardados correctamente', 'success');
+
+                  sendAdminNotification({
+                    type: 'new_client',
+                    client: { ...clientData, id: clientId },
+                    userName: profile?.displayName || user?.displayName || 'Usuario',
+                    settings,
+                  });
                 }}
                 onUpdateClient={async (id, clientData, vehiclesData) => {
                   await updateClient(id, clientData);
@@ -900,6 +982,14 @@ const MainAppContent: React.FC = () => {
         onSaveSale={async (data) => {
           const id = await createSale(data);
           showToast('Venta registrada con éxito', 'success');
+
+          sendAdminNotification({
+            type: 'new_sale',
+            sale: { ...data, id },
+            userName: profile?.displayName || user?.displayName || 'Usuario',
+            settings,
+          });
+
           return id;
         }}
         onCreated={(completeSale) => {

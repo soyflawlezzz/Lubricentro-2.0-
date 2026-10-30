@@ -1,9 +1,10 @@
-import { Client, Vehicle } from '../types';
+import { Client, Vehicle, WorkOrder } from '../types';
 
 const DB_NAME = 'LubricentroLocalCache';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_CLIENTS = 'clients';
 const STORE_VEHICLES = 'vehicles';
+const STORE_WORK_ORDERS = 'workOrders';
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -22,6 +23,9 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_VEHICLES)) {
         db.createObjectStore(STORE_VEHICLES, { keyPath: 'id' });
       }
+      if (!db.objectStoreNames.contains(STORE_WORK_ORDERS)) {
+        db.createObjectStore(STORE_WORK_ORDERS, { keyPath: 'id' });
+      }
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -30,7 +34,7 @@ function openDB(): Promise<IDBDatabase> {
 }
 
 /**
- * Retrieves cached clients from IndexedDB instantly
+ * Retrieves cached clients from IndexedDB
  */
 export async function getCachedClients(): Promise<Client[]> {
   try {
@@ -40,7 +44,7 @@ export async function getCachedClients(): Promise<Client[]> {
       const store = tx.objectStore(STORE_CLIENTS);
       const req = store.getAll();
 
-      req.onsuccess = () => resolve(req.result as Client[]);
+      req.onsuccess = () => resolve((req.result as Client[]) || []);
       req.onerror = () => reject(req.error);
     });
   } catch (err) {
@@ -50,16 +54,15 @@ export async function getCachedClients(): Promise<Client[]> {
 }
 
 /**
- * Saves or updates clients in IndexedDB cache
+ * Safely saves clients to IndexedDB cache without wiping
  */
 export async function saveCachedClients(clients: Client[]): Promise<void> {
+  if (!clients || clients.length === 0) return;
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_CLIENTS, 'readwrite');
     const store = tx.objectStore(STORE_CLIENTS);
 
-    // Clear and refill with latest snapshot
-    store.clear();
     for (const client of clients) {
       if (client && client.id) {
         store.put(client);
@@ -76,7 +79,7 @@ export async function saveCachedClients(clients: Client[]): Promise<void> {
 }
 
 /**
- * Retrieves cached vehicles from IndexedDB instantly
+ * Retrieves cached vehicles from IndexedDB
  */
 export async function getCachedVehicles(): Promise<Vehicle[]> {
   try {
@@ -86,7 +89,7 @@ export async function getCachedVehicles(): Promise<Vehicle[]> {
       const store = tx.objectStore(STORE_VEHICLES);
       const req = store.getAll();
 
-      req.onsuccess = () => resolve(req.result as Vehicle[]);
+      req.onsuccess = () => resolve((req.result as Vehicle[]) || []);
       req.onerror = () => reject(req.error);
     });
   } catch (err) {
@@ -96,16 +99,15 @@ export async function getCachedVehicles(): Promise<Vehicle[]> {
 }
 
 /**
- * Saves or updates vehicles in IndexedDB cache
+ * Safely saves vehicles to IndexedDB cache without wiping
  */
 export async function saveCachedVehicles(vehicles: Vehicle[]): Promise<void> {
+  if (!vehicles || vehicles.length === 0) return;
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_VEHICLES, 'readwrite');
     const store = tx.objectStore(STORE_VEHICLES);
 
-    // Clear and refill with latest snapshot
-    store.clear();
     for (const vehicle of vehicles) {
       if (vehicle && vehicle.id) {
         store.put(vehicle);
@@ -118,5 +120,50 @@ export async function saveCachedVehicles(vehicles: Vehicle[]): Promise<void> {
     });
   } catch (err) {
     console.warn('Error writing vehicles to IndexedDB cache:', err);
+  }
+}
+
+/**
+ * Retrieves cached work orders from IndexedDB
+ */
+export async function getCachedWorkOrders(): Promise<WorkOrder[]> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_WORK_ORDERS, 'readonly');
+      const store = tx.objectStore(STORE_WORK_ORDERS);
+      const req = store.getAll();
+
+      req.onsuccess = () => resolve((req.result as WorkOrder[]) || []);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('Error reading work orders from IndexedDB cache:', err);
+    return [];
+  }
+}
+
+/**
+ * Safely saves work orders to IndexedDB cache without wiping
+ */
+export async function saveCachedWorkOrders(orders: WorkOrder[]): Promise<void> {
+  if (!orders || orders.length === 0) return;
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_WORK_ORDERS, 'readwrite');
+    const store = tx.objectStore(STORE_WORK_ORDERS);
+
+    for (const order of orders) {
+      if (order && order.id) {
+        store.put(order);
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('Error writing work orders to IndexedDB cache:', err);
   }
 }
